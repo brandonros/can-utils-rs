@@ -88,35 +88,51 @@ pub fn recv(device_container: &DeviceContainer, handler: &mut Handler) {
   }
 }
 
-pub fn new() -> DeviceContainer {
-  let device = rusb::devices().unwrap().iter().find(|device| {
-  let device_desc = device.device_descriptor().unwrap();
-    return device_desc.vendor_id() == 0x0403 && device_desc.product_id() == 0xcc4d;
-  }).unwrap();
-  let mut device_handle = device.open().unwrap();
-  let config_desc = device.config_descriptor(0).unwrap();
-  device_handle.set_active_configuration(config_desc.number()).unwrap();
-  let interface = config_desc.interfaces().nth(1).unwrap();
-  let interface_desc = interface.descriptors().nth(0).unwrap();
-  device_handle.claim_interface(interface_desc.interface_number()).unwrap();
-  device_handle.set_alternate_setting(interface_desc.interface_number(), interface_desc.setting_number()).unwrap();
-  let device_container = DeviceContainer {
-    device,
-    device_handle
-  };
-  // open
+fn pass_thru_open(device_container: &DeviceContainer) {
   send_at_message(&device_container, format!("\r\n\r\nati\r\n"));
   send_at_message(&device_container, format!("ata\r\n"));
-  // connect
+}
+
+fn pass_thru_connect(device_container: &DeviceContainer) {
   let protocol_id = 0x00000005; // CAN
   let flags = 0x0800; // CAN_ID_BOTH
   let baud = 500000;
   send_at_message(&device_container, format!("ato{protocol_id} {flags} {baud} 0\r\n", protocol_id = protocol_id, flags = flags, baud = baud));
-  // start message filter
+}
+
+fn pass_thru_start_msg_filter(device_container: &DeviceContainer) {
+  let protocol_id = 0x00000005; // CAN
   let filter_type = 0x01; // PASS_FILTER
   let tx_flags = 0x00000040; // ISO15765_FRAME_PAD
   let mask_msg = String::from("\0\0\0\0");
   let pattern_msg = String::from("\0\0\0\0");
   send_at_message(&device_container, format!("atf{protocol_id} {filter_type} {tx_flags} 4\r\n{mask_msg}{pattern_msg}", protocol_id = protocol_id, filter_type = filter_type, tx_flags = tx_flags, mask_msg = mask_msg, pattern_msg = pattern_msg));
+}
+
+fn get_device_container() -> DeviceContainer {
+  let vendor_id = 0x0403;
+  let product_id = 0xcc4d;
+  let device = rusb::devices().unwrap().iter().find(|device| {
+  let device_desc = device.device_descriptor().unwrap();
+    return device_desc.vendor_id() == vendor_id && device_desc.product_id() == product_id;
+  }).unwrap();
+  let mut device_handle = device.open().unwrap();
+  let config_desc = device.config_descriptor(0).unwrap();
+  let interface = config_desc.interfaces().nth(1).unwrap();
+  let interface_desc = interface.descriptors().nth(0).unwrap();
+  device_handle.set_active_configuration(config_desc.number()).unwrap();
+  device_handle.claim_interface(interface_desc.interface_number()).unwrap();
+  device_handle.set_alternate_setting(interface_desc.interface_number(), interface_desc.setting_number()).unwrap();
+  return DeviceContainer {
+    device,
+    device_handle
+  };
+}
+
+pub fn new() -> DeviceContainer {
+  let device_container = get_device_container();
+  pass_thru_open(&device_container);
+  pass_thru_connect(&device_container);
+  pass_thru_start_msg_filter(&device_container);
   return device_container;
 }
