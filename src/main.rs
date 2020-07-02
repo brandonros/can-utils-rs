@@ -25,12 +25,16 @@ run()
 */
 
 fn main() {
+    // init device
     let device_handle = devices::tactrix_openport::new();
-    let device_handle_ref = &device_handle;
+    // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
+    // listen for connections
+    let websockets = vec![];
     for stream in server.incoming() {
         let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
-        // read from socket
+        websockets.push(websocket);
+        // read from socket, send to evice
         std::thread::spawn (move || {
             loop {
                 let msg = websocket.read_message().unwrap().into_data();
@@ -41,15 +45,17 @@ fn main() {
                     msg[3]
                 ]);
                 let data = &msg[4..];
-                devices::tactrix_openport::send_can_frame(device_handle_ref, arbitration_id, data);
+                devices::tactrix_openport::send_can_frame(&device_handle, arbitration_id, data);
             }
         });
     }
-    // read from device
+    // read from device, send to sockets
     std::thread::spawn (move || {
-        let handler = move |frame: Vec<u8>| {
-            //websocket.write_message(tungstenite::Message::Binary(frame)).unwrap();
+        let mut handler = move |frame: Vec<u8>| {
+            for websocket in websockets {
+                websocket.write_message(tungstenite::Message::Binary(frame)).unwrap();
+            }
         };
-        devices::tactrix_openport::recv(device_handle_ref, &handler);
+        devices::tactrix_openport::recv(&device_handle, &mut handler);
     });
 }
