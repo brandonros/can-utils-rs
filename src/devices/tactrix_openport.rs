@@ -2,15 +2,11 @@ extern crate rusb;
 
 use std::time::Duration;
 
-type Handler = dyn FnMut(Vec<u8>);
+type Handler = dyn Fn(Vec<u8>);
 
-pub struct DeviceContainer {
-  pub device: rusb::Device<rusb::GlobalContext>,
-  pub device_handle: rusb::DeviceHandle<rusb::GlobalContext>,
-}
-
-fn send_at_message(device_container: &DeviceContainer, line: String) {
-  let config_desc = device_container.device.config_descriptor(0).unwrap();
+fn send_at_message(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, line: String) {
+  let device = device_handle.device();
+  let config_desc = device.config_descriptor(0).unwrap();
   let interface = config_desc.interfaces().nth(1).unwrap();
   let interface_desc = interface.descriptors().nth(0).unwrap();
   let out_endpoint = interface_desc.endpoint_descriptors().find(|endpoint| {
@@ -18,11 +14,12 @@ fn send_at_message(device_container: &DeviceContainer, line: String) {
       endpoint.transfer_type() == rusb::TransferType::Bulk;
   }).unwrap();
   let timeout = Duration::from_secs(0);
-  device_container.device_handle.write_bulk(out_endpoint.address(), line.as_bytes(), timeout).unwrap();
+  device_handle.write_bulk(out_endpoint.address(), line.as_bytes(), timeout).unwrap();
 }
 
-pub fn send_can_frame(device_container: &DeviceContainer, arbitration_id: u32, frame: &[u8]) {
-  let config_desc = device_container.device.config_descriptor(0).unwrap();
+pub fn send_can_frame(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, arbitration_id: u32, frame: &[u8]) {
+  let device = device_handle.device();
+  let config_desc = device.config_descriptor(0).unwrap();
   let interface = config_desc.interfaces().nth(1).unwrap();
   let interface_desc = interface.descriptors().nth(0).unwrap();
   let out_endpoint = interface_desc.endpoint_descriptors().find(|endpoint| {
@@ -38,10 +35,10 @@ pub fn send_can_frame(device_container: &DeviceContainer, arbitration_id: u32, f
   buffer.extend_from_slice(&arbitration_id.to_be_bytes());
   buffer.extend_from_slice(&frame);
   let timeout = Duration::from_secs(0);
-  device_container.device_handle.write_bulk(out_endpoint.address(), &buffer, timeout).unwrap();
+  device_handle.write_bulk(out_endpoint.address(), &buffer, timeout).unwrap();
 }
 
-fn process_buffer(buffer: &Vec<u8>, handler: &mut Handler) -> usize {
+fn process_buffer(buffer: &Vec<u8>, handler: &Handler) -> usize {
   let mut i = 0;
   let mut bytes_processed = 0;
   while i < buffer.len() {
@@ -68,8 +65,9 @@ fn process_buffer(buffer: &Vec<u8>, handler: &mut Handler) -> usize {
   return bytes_processed;
 }
 
-pub fn recv(device_container: &DeviceContainer, handler: &mut Handler) {
-  let config_desc = device_container.device.config_descriptor(0).unwrap();
+pub fn recv(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, handler: &Handler) {
+  let device = device_handle.device();
+  let config_desc = device.config_descriptor(0).unwrap();
   let interface = config_desc.interfaces().nth(1).unwrap();
   let interface_desc = interface.descriptors().nth(0).unwrap();
   let in_endpoint = interface_desc.endpoint_descriptors().find(|endpoint| {
@@ -81,35 +79,35 @@ pub fn recv(device_container: &DeviceContainer, handler: &mut Handler) {
     let max_packet_size = in_endpoint.max_packet_size() as usize;
     let mut vec = vec![0; max_packet_size];
     let timeout = Duration::from_secs(0);
-    device_container.device_handle.read_bulk(in_endpoint.address(), &mut vec, timeout).unwrap();
+    device_handle.read_bulk(in_endpoint.address(), &mut vec, timeout).unwrap();
     buffer.extend(&vec);
     let bytes_processed = process_buffer(&buffer, handler);
     buffer = buffer[0..bytes_processed].to_vec();
   }
 }
 
-fn pass_thru_open(device_container: &DeviceContainer) {
-  send_at_message(&device_container, format!("\r\n\r\nati\r\n"));
-  send_at_message(&device_container, format!("ata\r\n"));
+fn pass_thru_open(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>) {
+  send_at_message(device_handle, format!("\r\n\r\nati\r\n"));
+  send_at_message(device_handle, format!("ata\r\n"));
 }
 
-fn pass_thru_connect(device_container: &DeviceContainer) {
+fn pass_thru_connect(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>) {
   let protocol_id = 0x00000005; // CAN
   let flags = 0x0800; // CAN_ID_BOTH
   let baud = 500000;
-  send_at_message(&device_container, format!("ato{protocol_id} {flags} {baud} 0\r\n", protocol_id = protocol_id, flags = flags, baud = baud));
+  send_at_message(device_handle, format!("ato{protocol_id} {flags} {baud} 0\r\n", protocol_id = protocol_id, flags = flags, baud = baud));
 }
 
-fn pass_thru_start_msg_filter(device_container: &DeviceContainer) {
+fn pass_thru_start_msg_filter(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>) {
   let protocol_id = 0x00000005; // CAN
   let filter_type = 0x01; // PASS_FILTER
   let tx_flags = 0x00000040; // ISO15765_FRAME_PAD
   let mask_msg = String::from("\0\0\0\0");
   let pattern_msg = String::from("\0\0\0\0");
-  send_at_message(&device_container, format!("atf{protocol_id} {filter_type} {tx_flags} 4\r\n{mask_msg}{pattern_msg}", protocol_id = protocol_id, filter_type = filter_type, tx_flags = tx_flags, mask_msg = mask_msg, pattern_msg = pattern_msg));
+  send_at_message(device_handle, format!("atf{protocol_id} {filter_type} {tx_flags} 4\r\n{mask_msg}{pattern_msg}", protocol_id = protocol_id, filter_type = filter_type, tx_flags = tx_flags, mask_msg = mask_msg, pattern_msg = pattern_msg));
 }
 
-fn get_device_container() -> DeviceContainer {
+fn get_device_handle() -> rusb::DeviceHandle<rusb::GlobalContext> {
   let vendor_id = 0x0403;
   let product_id = 0xcc4d;
   let device = rusb::devices().unwrap().iter().find(|device| {
@@ -123,16 +121,13 @@ fn get_device_container() -> DeviceContainer {
   device_handle.set_active_configuration(config_desc.number()).unwrap();
   device_handle.claim_interface(interface_desc.interface_number()).unwrap();
   device_handle.set_alternate_setting(interface_desc.interface_number(), interface_desc.setting_number()).unwrap();
-  return DeviceContainer {
-    device,
-    device_handle
-  };
+  return device_handle;
 }
 
-pub fn new() -> DeviceContainer {
-  let device_container = get_device_container();
-  pass_thru_open(&device_container);
-  pass_thru_connect(&device_container);
-  pass_thru_start_msg_filter(&device_container);
-  return device_container;
+pub fn new() -> rusb::DeviceHandle<rusb::GlobalContext> {
+  let device_handle = get_device_handle();
+  pass_thru_open(&device_handle);
+  pass_thru_connect(&device_handle);
+  pass_thru_start_msg_filter(&device_handle);
+  return device_handle;
 }
