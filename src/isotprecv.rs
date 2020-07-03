@@ -23,22 +23,14 @@ fn low_nibble(b: u8) -> u8 {
     return b & 0x0F;
 }
 
-fn record_single_frame(
-    data: &Vec<u8>,
-    isotp_reader: &IsoTpReader,
-    on_pdu: fn(u8, &Vec<u8>)
-) {
+fn record_single_frame(data: &Vec<u8>, isotp_reader: &IsoTpReader, on_pdu: fn(u8, &Vec<u8>)) {
     let length = data[0];
     let service_id = data[1];
     let payload = &data[2..((length as usize) + 1)];
     on_pdu(service_id, &payload.to_vec())
 }
 
-fn record_first_frame(
-    data: Vec<u8>,
-    isotp_reader: &IsoTpReader,
-    on_error: fn(String)
-) {
+fn record_first_frame(data: Vec<u8>, isotp_reader: &IsoTpReader, on_error: fn(String)) {
     // validate we do not already have a first frame
     if (isotp_reader.first_frame.is_some()) {
         on_error(String::from("unexpected first frame"));
@@ -51,7 +43,7 @@ fn record_first_frame(
 fn rebuild_multi_frame_message(
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_pdu: fn(u8, &Vec<u8>)
+    on_pdu: fn(u8, &Vec<u8>),
 ) {
     let mut output = vec![];
     for i in 2..8 {
@@ -72,7 +64,7 @@ fn record_consecutive_frame(
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
     on_pdu: fn(u8, &Vec<u8>),
-    on_error: fn(String)
+    on_error: fn(String),
 ) {
     // validate we have a first frame
     if (isotp_reader.first_frame.is_none()) {
@@ -109,25 +101,12 @@ fn record_frame(
 ) {
     let pci = high_nibble(data[0]);
     if (pci == 0x00) {
-        record_single_frame(
-            &data,
-            isotp_reader,
-            on_pdu
-        );
+        record_single_frame(&data, isotp_reader, on_pdu);
     } else if (pci == 0x01) {
-        record_first_frame(
-            data,
-            isotp_reader,
-            on_error
-        );
+        record_first_frame(data, isotp_reader, on_error);
         on_flow_control();
     } else if (pci == 0x02) {
-        record_consecutive_frame(
-            data,
-            isotp_reader,
-            on_pdu,
-            on_error,
-        );
+        record_consecutive_frame(data, isotp_reader, on_pdu, on_error);
     } else if (pci == 0x03) {
         // flow control; ignore
     } else {
