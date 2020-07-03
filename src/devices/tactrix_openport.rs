@@ -2,7 +2,7 @@ extern crate rusb;
 
 use std::time::Duration;
 
-type Handler = fn(Vec<u8>);
+type Handler = dyn FnMut(Vec<u8>);
 
 fn send_at_message(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, line: String) {
   let device = device_handle.device();
@@ -38,7 +38,7 @@ pub fn send_can_frame(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, a
   device_handle.write_bulk(out_endpoint.address(), &buffer, timeout).unwrap();
 }
 
-fn process_buffer(buffer: &Vec<u8>, handler: Handler) -> usize {
+fn process_buffer(buffer: &Vec<u8>, handler: &mut Handler) -> usize {
   let mut i = 0;
   let mut bytes_processed = 0;
   while i < buffer.len() {
@@ -55,7 +55,7 @@ fn process_buffer(buffer: &Vec<u8>, handler: Handler) -> usize {
       let payload = &buffer[i + 4..i + 4 + payload_length];
       let _header = &payload[0..5];
       let body = &payload[5..];
-      handler(body.to_vec());
+      (*handler)(body.to_vec());
       i = i + 4 + payload_length;
       bytes_processed = i;
     } else {
@@ -65,7 +65,7 @@ fn process_buffer(buffer: &Vec<u8>, handler: Handler) -> usize {
   return bytes_processed;
 }
 
-pub fn recv(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, handler: Handler) {
+pub fn recv(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, handler: &mut Handler) {
   let device = device_handle.device();
   let config_desc = device.config_descriptor(0).unwrap();
   let interface = config_desc.interfaces().nth(1).unwrap();

@@ -54,5 +54,5 @@ fn main() {
             websocket.write_message(binary_frame).unwrap();
         }
     };
-    devices::tactrix_openport::recv(&device_handle, handler);
+    devices::tactrix_openport::recv(&device_handle, &handler);
 }
