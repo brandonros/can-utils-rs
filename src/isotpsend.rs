@@ -151,5 +151,6 @@ fn main() {
     socket.write_message(tungstenite::Message::Binary(buffer));
     std::thread::sleep(std::time::Duration::from_nanos(st_min));
   }
+  // disconnect from server
   socket.close(None).unwrap();
 }
