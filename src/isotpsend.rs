@@ -73,11 +73,12 @@ class IsoTpWriter {
 }
 */
 
+extern crate tungstenite;
 extern crate hex;
 extern crate clap;
+extern crate url;
 
 use std::io;
-use std::io::prelude::*;
 
 use clap::{Arg, App};
 
@@ -95,6 +96,7 @@ fn read_stdin() -> Vec<u8> {
 }
 
 fn main() {
+  // parse CLI options
   let matches = App::new("isotpsend")
       .version("0.0.1")
       .about("send a single ISO-TP PDU")
@@ -131,22 +133,23 @@ fn main() {
            .required(true)
       )
       .get_matches();
-  // 1. parse CLI options
-  // 2. read stdin
-  // 3. connect to socket
-  // 4. convert convertPduToFrames
-  // 5. send every frame to device over websocket?
+  let interface = matches.value_of("interface").unwrap();
   let st_min: u64 = matches.value_of("st_min").unwrap().parse().unwrap();
   let source_arbitration_id: u32 = u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
+  // connect to server
+  let (mut socket, _) = tungstenite::connect(url::Url::parse(interface).unwrap()).unwrap();
+  // read stdin
   let stdin = read_stdin();
   let service_id = stdin[0];
   let data = &stdin[1..];
+  // convert stdin to frames
   let frames = convert_pdu_to_frames(service_id, data.to_vec());
   for frame in frames {
     let mut buffer: Vec<u8> = vec![];
     buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
     buffer.extend_from_slice(&frame);
-    println!("{:?}", buffer);
+    socket.write_message(tungstenite::Message::Binary(buffer));
     std::thread::sleep(std::time::Duration::from_nanos(st_min));
   }
+  socket.close(None).unwrap();
 }

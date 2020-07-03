@@ -109,6 +109,7 @@ dependencies = [
  "hex",
  "rusb",
  "tungstenite",
+ "url",
 ]
 
 [[package]]
