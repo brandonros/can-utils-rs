@@ -176,6 +176,7 @@ fn main() {
     loop {
         let frame = socket.read_message().unwrap().into_data();
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+        // TODO: should drop if arbitration_id !== destination_arbittraion_id
         let data = &frame[4..];
         let on_flow_control = || {
             let flow_control_frame: Vec<u8> = vec![

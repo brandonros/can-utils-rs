@@ -143,13 +143,18 @@ fn main() {
     let data = &stdin[1..];
     // convert stdin to frames
     let frames = convert_pdu_to_frames(service_id, data.to_vec(), tx_padding_byte);
-    for frame in frames {
+    for i in 0..frames.len() {
+        if (i == 1) {
+          // TODO: wait for flow control frame
+        }
+        let frame = &frames[i];
         let mut buffer: Vec<u8> = vec![];
         buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
         buffer.extend_from_slice(&frame);
         socket.write_message(tungstenite::Message::Binary(buffer));
         std::thread::sleep(std::time::Duration::from_nanos(st_min));
     }
+    // TODO: set up websocket reader to watch for flow control frame if pci == 0x03
     // disconnect from server
     socket.close(None).unwrap();
 }
