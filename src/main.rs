@@ -1,6 +1,7 @@
 extern crate tungstenite;
 
 use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
 use can_utils_rs::{devices};
 
 /*
@@ -27,18 +28,19 @@ run()
 
 fn main() {
     // init device
-    let device_handle = devices::tactrix_openport::new();
+    let device_handle = Arc::new(devices::tactrix_openport::new());
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
     // listen for connections
-    let websockets = Arc::new(Mutex::new(vec![]));
+    let mut websockets = vec![];
     for stream in server.incoming() {
-        let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
-        websockets.lock().unwrap().push(websocket);
+        let websocket = Arc::new(Mutex::new(tungstenite::server::accept(stream.unwrap()).unwrap()));
+        websockets.push(websocket.clone());
+        let handle = device_handle.clone();
         // read from socket, send to device
         std::thread::spawn (move || {
             loop {
-                let msg = websocket.read_message().unwrap().into_data();
+                let msg = websocket.lock().unwrap().read_message().unwrap().into_data();
                 let arbitration_id = u32::from_be_bytes([
                     msg[0],
                     msg[1],
@@ -46,16 +48,16 @@ fn main() {
                     msg[3]
                 ]);
                 let data = &msg[4..];
-                devices::tactrix_openport::send_can_frame(&device_handle, arbitration_id, data);
+                devices::tactrix_openport::send_can_frame(&handle, arbitration_id, data);
             }
         });
     }
     // read from device, send to sockets
     std::thread::spawn (move || {
         let mut handler = move |frame: Vec<u8>| {
-            for websocket in &mut *websockets.lock().unwrap() {
+            for websocket in websockets.iter() {
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
-                websocket.write_message(binary_frame).unwrap();
+                websocket.lock().unwrap().write_message(binary_frame).unwrap();
             }
         };
         devices::tactrix_openport::recv(&device_handle, &mut handler);
