@@ -27,14 +27,14 @@ fn low_nibble(b: u8) -> u8 {
     return b & 0x0F;
 }
 
-fn record_single_frame(data: &Vec<u8>, isotp_reader: &IsoTpReader, on_pdu: &mut OnPdu) {
+fn record_single_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_pdu: &mut OnPdu) {
     let length = data[0];
     let service_id = data[1];
     let payload = &data[2..((length as usize) + 1)];
     on_pdu(service_id, &payload.to_vec())
 }
 
-fn record_first_frame(data: &Vec<u8>, isotp_reader: &IsoTpReader, on_error: &mut OnError) {
+fn record_first_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_error: &mut OnError) {
     // validate we do not already have a first frame
     if (isotp_reader.first_frame.is_some()) {
         on_error(String::from("unexpected first frame"));
@@ -47,7 +47,7 @@ fn record_first_frame(data: &Vec<u8>, isotp_reader: &IsoTpReader, on_error: &mut
 
 fn rebuild_multi_frame_message(
     data: &Vec<u8>,
-    isotp_reader: &IsoTpReader,
+    isotp_reader: &mut IsoTpReader,
     on_pdu: &mut OnPdu,
 ) {
     let mut output = vec![];
@@ -67,7 +67,7 @@ fn rebuild_multi_frame_message(
 
 fn record_consecutive_frame(
     data: &Vec<u8>,
-    isotp_reader: &IsoTpReader,
+    isotp_reader: &mut IsoTpReader,
     on_pdu: &mut OnPdu,
     on_error: &mut OnError
 ) {
@@ -99,7 +99,7 @@ fn record_consecutive_frame(
 
 fn record_frame(
     data: &Vec<u8>,
-    isotp_reader: &IsoTpReader,
+    isotp_reader: &mut IsoTpReader,
     on_flow_control: &mut OnFlowControl,
     on_pdu: &mut OnPdu,
     on_error: &mut OnError,
@@ -177,7 +177,7 @@ fn main() {
     // connect to server
     let (mut socket, _) = tungstenite::connect(url::Url::parse(interface).unwrap()).unwrap();
     // on websocket frame, log to isotpreader
-    let mut isotp_reader_map: HashMap<u32, &IsoTpReader> = HashMap::new();
+    let mut isotp_reader_map: HashMap<u32, IsoTpReader> = HashMap::new();
     loop {
         let frame = socket.read_message().unwrap().into_data();
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
@@ -212,26 +212,26 @@ fn main() {
             isotp_reader_map.remove(&arbitration_id);
         };
         match isotp_reader_map.get(&arbitration_id) {
-            Some(isotp_reader) => {
+            Some(mut isotp_reader) => {
                 record_frame(
                     &data.to_vec(),
-                    &isotp_reader,
+                    &mut isotp_reader,
                     &mut on_flow_control,
                     &mut on_pdu,
                     &mut on_error,
                 );
             }
             None => {
-                let isotp_reader = IsoTpReader {
+                let mut isotp_reader = IsoTpReader {
                     first_frame: Some(vec![]),
                     consecutive_frames: vec![],
                     sequence_number: 0x21,
                     expected_size: 0x00,
                 };
-                isotp_reader_map.insert(arbitration_id, &isotp_reader);
+                isotp_reader_map.insert(arbitration_id, isotp_reader);
                 record_frame(
                     &data.to_vec(),
-                    &isotp_reader,
+                    &mut isotp_reader,
                     &mut on_flow_control,
                     &mut on_pdu,
                     &mut on_error,
