@@ -130,7 +130,7 @@ fn main() {
         .get_matches();
     let padding_bytes = matches.value_of("padding_bytes").unwrap();
     let split_padding_bytes = padding_bytes.split(":").collect::<Vec<_>>();
-    let tx_padding_byte = u32::from_str_radix(split_padding_bytes[0], 16).unwrap();
+    let tx_padding_byte = u32::from_str_radix(split_padding_bytes[0], 16).unwrap() as u8;
     let interface = matches.value_of("interface").unwrap();
     let st_min: u64 = matches.value_of("st_min").unwrap().parse().unwrap();
     let source_arbitration_id: u32 =

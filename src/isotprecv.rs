@@ -9,7 +9,7 @@ use std::io;
 use clap::{App, Arg};
 
 struct IsoTpReader {
-    pub first_frame: Vec<u8>,
+    pub first_frame: Option<Vec<u8>>,
     pub consecutive_frames: Vec<Vec<u8>>,
     pub sequence_number: u8,
     pub expected_size: u16,
@@ -19,132 +19,112 @@ fn high_nibble(b: u8) -> u8 {
     return ((b) >> 4) & 0x0F;
 }
 
+fn low_nibble(b: u8) -> u8 {
+    return b & 0x0F;
+}
+
 fn record_single_frame(
-    arbitration_id: u32,
-    data: Vec<u8>,
+    data: &Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_flow_control: fn(Vec<u8>),
-    on_pdu: fn(),
-    on_error: fn(),
+    on_pdu: fn(u8, &Vec<u8>)
 ) {
-    /*
-      const length = data[0]
-      const serviceId = data[1]
-      const payload = data.slice(2, length + 1)
-      this.onPdu(serviceId, payload)
-    */
+    let length = data[0];
+    let service_id = data[1];
+    let payload = &data[2..((length as usize) + 1)];
+    on_pdu(service_id, &payload.to_vec())
 }
 
 fn record_first_frame(
-    arbitration_id: u32,
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_flow_control: fn(Vec<u8>),
-    on_pdu: fn(),
-    on_error: fn(),
+    on_error: fn(String)
 ) {
-    /*
-      this.firstFrame = data
-      this.expectedSize = (lowNibble(data[0]) << 8) + data[1]
-    */
+    // validate we do not already have a first frame
+    if (isotp_reader.first_frame.is_some()) {
+        on_error(String::from("unexpected first frame"));
+        return;
+    }
+    isotp_reader.first_frame = Some(data);
+    isotp_reader.expected_size = ((low_nibble(data[0]) << 8) as u16) + (data[1] as u16);
 }
 
 fn rebuild_multi_frame_message(
-    arbitration_id: u32,
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_flow_control: fn(Vec<u8>),
-    on_pdu: fn(),
-    on_error: fn(),
+    on_pdu: fn(u8, &Vec<u8>)
 ) {
-    /*
-      const output = []
-      // skip first 2 bytes of first frame
-      for (let i = 2; i < 8; ++i) {
-        output.push(this.firstFrame[i])
-      }
-      this.consecutiveFrames.forEach(frame => {
-        // skip first byte of consecutive frames
-        for (let i = 1; i < 8; ++i) {
-          output.push(frame[i])
+    let mut output = vec![];
+    for i in 2..8 {
+        output.push(isotp_reader.first_frame.unwrap()[i]);
+    }
+    for consecutive_frame in isotp_reader.consecutive_frames {
+        for i in 1..8 {
+            output.push(consecutive_frame[i]);
         }
-      })
-      const isotpPayload = output.slice(0, this.expectedSize)
-      const serviceId = isotpPayload[0]
-      const data = isotpPayload.slice(1)
-      this.onPdu(serviceId, data)
-    */
+    }
+    let isotp_payload = &output[0..isotp_reader.expected_size as usize];
+    let service_id = isotp_payload[0];
+    let data = &isotp_payload[1..];
+    on_pdu(service_id, &data.to_vec())
 }
 
 fn record_consecutive_frame(
-    arbitration_id: u32,
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_flow_control: fn(Vec<u8>),
-    on_pdu: fn(),
-    on_error: fn(),
+    on_pdu: fn(u8, &Vec<u8>),
+    on_error: fn(String)
 ) {
-    /*
-      // validate we have a first frame
-      if (!this.firstFrame) {
-        this.onError(new Error('received unexpected consecutive frame'))
-        return
-      }
-      // validate sequence number
-      const sequenceNumber = data[0]
-      if (sequenceNumber !== this.expectedSequenceNumber) {
-        this.onError(new Error('received unexpected sequence number'))
-        return
-      }
-      // wrap expectedSequenceNumber
-      this.expectedSequenceNumber += 1
-      if (this.expectedSequenceNumber === 0x30) {
-        this.expectedSequenceNumber = 0x20
-      }
-      // store frame
-      this.consecutiveFrames.push(data)
-      // check if finished receiving
-      const currentSize = 6 + this.consecutiveFrames.length * 7
-      const finishedReceiving = currentSize >= this.expectedSize
-      if (finishedReceiving) {
-        this.rebuildMultiFrameMessage()
-      }
-    */
+    // validate we have a first frame
+    if (isotp_reader.first_frame.is_none()) {
+        on_error(String::from("unexpected conseuctive frame; no first frame"));
+        return;
+    }
+    // validate sequence number
+    let sequence_number = data[0];
+    if sequence_number != isotp_reader.sequence_number {
+        on_error(String::from("unexpected sequence number"));
+        return;
+    }
+    // wrap expectedSequenceNumber
+    isotp_reader.sequence_number = isotp_reader.sequence_number + 1;
+    if isotp_reader.sequence_number == 0x30 {
+        isotp_reader.sequence_number = 0x20;
+    }
+    // store frame
+    isotp_reader.consecutive_frames.push(data);
+    // check if finished receiving
+    let current_size = 6 + isotp_reader.consecutive_frames.len() * 7;
+    let finished_receiving = current_size >= isotp_reader.expected_size as usize;
+    if (finished_receiving) {
+        rebuild_multi_frame_message(data, isotp_reader, on_pdu);
+    }
 }
 
 fn record_frame(
-    arbitration_id: u32,
     data: Vec<u8>,
     isotp_reader: &IsoTpReader,
-    on_flow_control: fn(Vec<u8>),
-    on_pdu: fn(),
-    on_error: fn(),
+    on_flow_control: fn(),
+    on_pdu: fn(u8, &Vec<u8>),
+    on_error: fn(String),
 ) {
     let pci = high_nibble(data[0]);
     if (pci == 0x00) {
         record_single_frame(
-            arbitration,
-            data,
+            &data,
             isotp_reader,
-            on_flow_control,
-            on_pdu,
-            on_error,
+            on_pdu
         );
     } else if (pci == 0x01) {
         record_first_frame(
-            arbitration,
             data,
             isotp_reader,
-            on_flow_control,
-            on_pdu,
-            on_error,
+            on_error
         );
+        on_flow_control();
     } else if (pci == 0x02) {
         record_consecutive_frame(
-            arbitration,
             data,
             isotp_reader,
-            on_flow_control,
             on_pdu,
             on_error,
         );
@@ -235,16 +215,20 @@ fn main() {
             socket.write_message(tungstenite::Message::Binary(buffer));
         };
         let on_pdu = |pdu: Vec<u8>| {
-            // TODO: log to stdout
+            let mut output = String::new();
+            for byte in pdu {
+                output = format!("{} {:02x}", output, byte);
+            }
+            println!("{}", output.trim());
             isotp_reader_map.remove(&arbitration_id);
         };
-        let on_error = || {
+        let on_error = |reason: String| {
+            println!("error: {}", reason);
             isotp_reader_map.remove(&arbitration_id);
         };
         match isotp_reader_map.get(&arbitration_id) {
             Some(isotp_reader) => {
                 record_frame(
-                    arbitration_id,
                     data.to_vec(),
                     &isotp_reader,
                     on_flow_control,
@@ -254,14 +238,13 @@ fn main() {
             }
             None => {
                 let isotp_reader = IsoTpReader {
-                    first_frame: vec![],
+                    first_frame: Some(vec![]),
                     consecutive_frames: vec![],
                     sequence_number: 0x21,
                     expected_size: 0x00,
                 };
                 isotp_reader_map.insert(arbitration_id, isotp_reader);
                 record_frame(
-                    arbitration_id,
                     data.to_vec(),
                     &isotp_reader,
                     on_flow_control,
@@ -271,5 +254,4 @@ fn main() {
             }
         }
     }
-    // 4. on PDU, log output
 }
