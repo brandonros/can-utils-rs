@@ -12,9 +12,8 @@ fn build_single_frame(service_id: u8, data: &Vec<u8>, tx_padding_byte: u8) -> Ve
     for i in 0..data.len() {
         frame.push(data[i]);
     }
-    let frame_size = 8;
     let num_padding_bytes = 8 - frame.len();
-    for i in 0..num_padding_bytes {
+    for _ in 0..num_padding_bytes {
         frame.push(tx_padding_byte);
     }
     return frame;
@@ -35,13 +34,13 @@ fn build_first_frame(service_id: u8, data: &Vec<u8>) -> Vec<u8> {
 }
 
 fn build_consecutive_frame(sequence_number: u8, data: &Vec<u8>, tx_padding_byte: u8) -> Vec<u8> {
-    let frame_length = if (data.len() >= 7) { 7 } else { data.len() };
+    let frame_length = if data.len() >= 7 { 7 } else { data.len() };
     let frame_data = &data[0..frame_length];
     let mut frame = vec![];
     frame.push(sequence_number);
     frame.extend_from_slice(frame_data);
     let padding_length = 7 - frame_data.len();
-    for i in 0..padding_length {
+    for _ in 0..padding_length {
         frame.push(tx_padding_byte);
     }
     return frame;
@@ -54,23 +53,23 @@ fn convert_pdu_to_frames(service_id: u8, data: Vec<u8>, tx_padding_byte: u8) -> 
     let mut frames = vec![];
     frames.push(build_first_frame(service_id, &data));
     let mut remaining_data = &data[5..];
-    let num_conseuctive_frames = if (remaining_data.len() % 7 == 0) {
+    let num_conseuctive_frames = if remaining_data.len() % 7 == 0 {
         remaining_data.len() / 7
     } else {
         (remaining_data.len() / 7) + 1
     };
     let mut sequence_number = 0x21;
-    for i in 0..num_conseuctive_frames {
+    for _ in 0..num_conseuctive_frames {
         frames.push(build_consecutive_frame(
             sequence_number,
             &remaining_data.to_vec(),
             tx_padding_byte,
         ));
         sequence_number = sequence_number + 1;
-        if (sequence_number == 0x30) {
+        if sequence_number == 0x30 {
             sequence_number = 0x20;
         }
-        remaining_data = if (remaining_data.len() >= 7) {
+        remaining_data = if remaining_data.len() >= 7 {
             &remaining_data[7..]
         } else {
             &remaining_data[remaining_data.len()..]
