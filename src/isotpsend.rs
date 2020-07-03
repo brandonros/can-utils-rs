@@ -7,79 +7,76 @@ use std::io;
 
 use clap::{App, Arg};
 
-fn build_single_frame(service_id: u8, data: Vec<u8>) -> Vec<u8> {
-    /*
-      const frame = [data.length + 1, serviceId]
-      for (let i = 0; i < data.length; ++i) {
-        frame[i + 2] = data[i]
-      }
-      for (let i = frame.length; i < 8; ++i) {
-        frame.push(0x55) // padding
-      }
-      return Buffer.from(frame)
-    */
+fn build_single_frame(service_id: u8, data: &Vec<u8>, tx_padding_byte: u8) -> Vec<u8> {
+    let mut frame = vec![(data.len() + 1) as u8, service_id];
+    for i in 0..data.len() {
+        frame.push(data[i]);
+    }
+    let frame_size = 8;
+    let num_padding_bytes = 8 - frame.len();
+    for i in 0..num_padding_bytes {
+        frame.push(tx_padding_byte);
+    }
+    return frame;
 }
 
-fn build_first_frame(service_id: u8, data: Vec<u8>) -> Vec<u8> {
-    /*
-      const responseLength = data.length + 1 // add a byte for response SID
-      const firstFrameData = data.slice(0, 5)
-      const firstFrameHeader = Buffer.from([
-        (0x01 << 4) ^ (responseLength >> 8),
-        responseLength & 0xFF,
-        serviceId
-      ])
-      return Buffer.concat([
-        firstFrameHeader,
-        firstFrameData
-      ])
-    */
+fn build_first_frame(service_id: u8, data: &Vec<u8>) -> Vec<u8> {
+    let response_length = (data.len() + 1) as u16;
+    let first_frame_data = &data[0..5];
+    let first_frame_header = vec![
+        ((0x01 << 4) ^ (response_length >> 8)) as u8,
+        (response_length & 0xFF) as u8,
+        service_id as u8,
+    ];
+    let mut frame = vec![];
+    frame.extend_from_slice(&first_frame_header);
+    frame.extend_from_slice(&first_frame_data);
+    return frame;
 }
 
-fn build_consecutive_frame(sequenceNumber: u8, data: Vec<u8>) -> Vec<u8> {
-    /*
-      let frameData = remainingData.slice(0, 7)
-      // Pad last frame
-      if (frameData.length < 7) {
-        const paddingLength = 7 - frameData.length
-        const padding = Buffer.from(new Array(paddingLength).fill(0x55))
-        frameData = Buffer.concat([
-          frameData,
-          padding
-        ])
-      }
-      const consecutiveFrameHeader = Buffer.from([
-        sequenceNumber
-      ])
-      return Buffer.concat([
-        consecutiveFrameHeader,
-        frameData
-      ])
-    */
+fn build_consecutive_frame(sequence_number: u8, data: &Vec<u8>, tx_padding_byte: u8) -> Vec<u8> {
+    let frame_length = if (data.len() >= 7) { 7 } else { data.len() };
+    let frame_data = &data[0..frame_length];
+    let mut frame = vec![];
+    frame.push(sequence_number);
+    frame.extend_from_slice(frame_data);
+    let padding_length = 7 - frame_data.len();
+    for i in 0..padding_length {
+        frame.push(tx_padding_byte);
+    }
+    return frame;
 }
 
-fn convert_pdu_to_frames(service_id: u8, data: Vec<u8>) -> Vec<Vec<u8>> {
-    /*
-      if (data.length <= 6) {
-        return [this.buildSingleFrame(serviceId, data)]
-      }
-      const frames = []
-      frames.push(this.buildFirstFrame(serviceId, data))
-      let remainingData = data.slice(5) // first frame data length = 5
-      const numConsecutiveFrames = Math.ceil(remainingData.length / 7)
-      let sequenceNumber = 0x21
-      for (let i = 0; i < numConsecutiveFrames; ++i) {
-        frames.push(this.buildConsecutiveFrame(sequenceNumber, remainingData))
-        sequenceNumber += 1
-        // Wrap consecutive frame counter
-        if (sequenceNumber === 0x30) {
-          sequenceNumber = 0x20
+fn convert_pdu_to_frames(service_id: u8, data: Vec<u8>, tx_padding_byte: u8) -> Vec<Vec<u8>> {
+    if data.len() <= 6 {
+        return vec![build_single_frame(service_id, &data, tx_padding_byte)];
+    }
+    let mut frames = vec![];
+    frames.push(build_first_frame(service_id, &data));
+    let mut remaining_data = &data[5..];
+    let num_conseuctive_frames = if (remaining_data.len() % 7 == 0) {
+        remaining_data.len() / 7
+    } else {
+        (remaining_data.len() / 7) + 1
+    };
+    let mut sequence_number = 0x21;
+    for i in 0..num_conseuctive_frames {
+        frames.push(build_consecutive_frame(
+            sequence_number,
+            &remaining_data.to_vec(),
+            tx_padding_byte,
+        ));
+        sequence_number = sequence_number + 1;
+        if (sequence_number == 0x30) {
+            sequence_number = 0x20;
         }
-        remainingData = remainingData.slice(7)
-      }
-      return frames
-    */
-    return vec![vec![0x02, 0x10, 0x03]];
+        remaining_data = if (remaining_data.len() >= 7) {
+            &remaining_data[7..]
+        } else {
+            &remaining_data[remaining_data.len()..]
+        };
+    }
+    return frames;
 }
 
 fn read_stdin() -> Vec<u8> {
@@ -132,6 +129,9 @@ fn main() {
                 .required(true),
         )
         .get_matches();
+    let padding_bytes = matches.value_of("padding_bytes").unwrap();
+    let split_padding_bytes = padding_bytes.split(":").collect::<Vec<_>>();
+    let tx_padding_byte = u32::from_str_radix(split_padding_bytes[0], 16).unwrap();
     let interface = matches.value_of("interface").unwrap();
     let st_min: u64 = matches.value_of("st_min").unwrap().parse().unwrap();
     let source_arbitration_id: u32 =
@@ -143,7 +143,7 @@ fn main() {
     let service_id = stdin[0];
     let data = &stdin[1..];
     // convert stdin to frames
-    let frames = convert_pdu_to_frames(service_id, data.to_vec());
+    let frames = convert_pdu_to_frames(service_id, data.to_vec(), tx_padding_byte);
     for frame in frames {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());

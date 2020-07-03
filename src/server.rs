@@ -67,7 +67,7 @@ fn main() {
                     .read_message()
                     .unwrap()
                     .into_data();
-                if (msg.len() == 0) {
+                if msg.len() == 0 {
                     continue;
                 }
                 println!("{:?}", msg);
