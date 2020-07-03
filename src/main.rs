@@ -31,30 +31,32 @@ fn main() {
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
     // listen for connections
-    let mut websockets = vec![];
-    for stream in server.incoming() {
-        let websocket = Arc::new(Mutex::new(tungstenite::server::accept(stream.unwrap()).unwrap()));
-        websockets.push(websocket.clone());
-        let handle = device_handle.clone();
-        // read from socket, send to device
-        std::thread::spawn (move || {
-            loop {
-                let msg = websocket.lock().unwrap().read_message().unwrap().into_data();
-                let arbitration_id = u32::from_be_bytes([
-                    msg[0],
-                    msg[1],
-                    msg[2],
-                    msg[3]
-                ]);
-                let data = &msg[4..];
-                devices::tactrix_openport::send_can_frame(&handle, arbitration_id, data);
-            }
-        });
-    }
+    let mut websockets = Arc::new(Mutex::new(vec![]));
+    std::thread::spawn (move || {
+        for stream in server.incoming() {
+            let websocket = Arc::new(Mutex::new(tungstenite::server::accept(stream.unwrap()).unwrap()));
+            websockets.lock().unwrap().push(websocket.clone());
+            let handle = device_handle.clone();
+            // read from socket, send to device
+            std::thread::spawn (move || {
+                loop {
+                    let msg = websocket.lock().unwrap().read_message().unwrap().into_data();
+                    let arbitration_id = u32::from_be_bytes([
+                        msg[0],
+                        msg[1],
+                        msg[2],
+                        msg[3]
+                    ]);
+                    let data = &msg[4..];
+                    devices::tactrix_openport::send_can_frame(&handle, arbitration_id, data);
+                }
+            });
+        }
+    });
     // read from device, send to sockets
     std::thread::spawn (move || {
         let mut handler = move |frame: Vec<u8>| {
-            for websocket in websockets.iter() {
+            for websocket in websockets.lock().unwrap().iter() {
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
                 websocket.lock().unwrap().write_message(binary_frame).unwrap();
             }
