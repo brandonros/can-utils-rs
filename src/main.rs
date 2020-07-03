@@ -27,7 +27,9 @@ run()
 
 fn main() {
     // init device
-    let device_handle = Arc::new(devices::tactrix_openport::new());
+    let device_handle_main = Arc::new(devices::tactrix_openport::new());
+    let device_handle1 = device_handle_main.clone();
+    let device_handle2 = device_handle_main.clone();
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
     // listen for connections
@@ -36,7 +38,6 @@ fn main() {
         for stream in server.incoming() {
             let websocket = Arc::new(Mutex::new(tungstenite::server::accept(stream.unwrap()).unwrap()));
             websockets.lock().unwrap().push(websocket.clone());
-            let handle = device_handle.clone();
             // read from socket, send to device
             std::thread::spawn (move || {
                 loop {
@@ -48,7 +49,7 @@ fn main() {
                         msg[3]
                     ]);
                     let data = &msg[4..];
-                    devices::tactrix_openport::send_can_frame(&handle, arbitration_id, data);
+                    devices::tactrix_openport::send_can_frame(&device_handle1, arbitration_id, data);
                 }
             });
         }
@@ -61,6 +62,6 @@ fn main() {
                 websocket.lock().unwrap().write_message(binary_frame).unwrap();
             }
         };
-        devices::tactrix_openport::recv(&device_handle, &mut handler);
+        devices::tactrix_openport::recv(&device_handle2, &mut handler);
     });
 }
