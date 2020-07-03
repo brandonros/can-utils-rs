@@ -1,5 +1,6 @@
 extern crate tungstenite;
 
+use std::sync::{Arc, Mutex};
 use can_utils_rs::{devices};
 
 /*
@@ -30,10 +31,10 @@ fn main() {
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
     // listen for connections
-    let websockets = vec![];
+    let websockets = Arc::new(Mutex::new(vec![]));
     for stream in server.incoming() {
         let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
-        websockets.push(websocket);
+        websockets.lock().unwrap().push(websocket);
         // read from socket, send to evice
         std::thread::spawn (move || {
             loop {
@@ -52,8 +53,9 @@ fn main() {
     // read from device, send to sockets
     std::thread::spawn (move || {
         let mut handler = move |frame: Vec<u8>| {
-            for websocket in websockets {
-                websocket.write_message(tungstenite::Message::Binary(frame)).unwrap();
+            for websocket in websockets.lock().unwrap().iter() {
+                let binary_frame = tungstenite::Message::Binary(frame);
+                websocket.write_message(binary_frame).unwrap();
             }
         };
         devices::tactrix_openport::recv(&device_handle, &mut handler);
