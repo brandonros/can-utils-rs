@@ -73,10 +73,80 @@ class IsoTpWriter {
 }
 */
 
+extern crate hex;
+extern crate clap;
+
+use std::io;
+use std::io::prelude::*;
+
+use clap::{Arg, App};
+
+fn convert_pdu_to_frames(service_id: u8, data: Vec<u8>) -> Vec<Vec<u8>> {
+  return vec![
+    vec![0x02, 0x10, 0x03]
+  ];
+}
+
+fn read_stdin() -> Vec<u8> {
+  let stdin = io::stdin();
+  let mut buf = String::new();
+  stdin.read_line(&mut buf);
+  return hex::decode(buf.trim().replace(" ", "")).unwrap();
+}
+
 fn main() {
+  let matches = App::new("isotpsend")
+      .version("0.0.1")
+      .about("send a single ISO-TP PDU")
+      .arg(Arg::with_name("source_arbitration_id")
+           .short("s")
+           .long("source-arbitration-id")
+           .help("source arbitration ID")
+           .takes_value(true)
+           .required(true)
+      )
+      .arg(Arg::with_name("destination_arbitration_id")
+           .short("d")
+           .long("destination-arbitration-id")
+           .help("destination arbitration ID")
+           .takes_value(true)
+           .required(true)
+      )
+      .arg(Arg::with_name("padding_bytes")
+           .short("p")
+           .long("padding-bytes")
+           .help("TX:RX padding byte")
+           .takes_value(true)
+           .required(true)
+      )
+      .arg(Arg::with_name("st_min")
+           .short("f")
+           .long("st-min")
+           .help("STMin in nanoseconds")
+           .takes_value(true)
+           .required(true)
+      )
+      .arg(Arg::with_name("interface")
+           .help("CAN interface")
+           .required(true)
+      )
+      .get_matches();
   // 1. parse CLI options
   // 2. read stdin
   // 3. connect to socket
   // 4. convert convertPduToFrames
   // 5. send every frame to device over websocket?
+  let st_min: u64 = matches.value_of("st_min").unwrap().parse().unwrap();
+  let source_arbitration_id: u32 = u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
+  let stdin = read_stdin();
+  let service_id = stdin[0];
+  let data = &stdin[1..];
+  let frames = convert_pdu_to_frames(service_id, data.to_vec());
+  for frame in frames {
+    let mut buffer: Vec<u8> = vec![];
+    buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
+    buffer.extend_from_slice(&frame);
+    println!("{:?}", buffer);
+    std::thread::sleep(std::time::Duration::from_nanos(st_min));
+  }
 }
