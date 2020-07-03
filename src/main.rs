@@ -35,7 +35,7 @@ fn main() {
     for stream in server.incoming() {
         let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
         websockets.lock().unwrap().push(websocket);
-        // read from socket, send to evice
+        // read from socket, send to device
         std::thread::spawn (move || {
             loop {
                 let msg = websocket.read_message().unwrap().into_data();
@@ -53,8 +53,8 @@ fn main() {
     // read from device, send to sockets
     std::thread::spawn (move || {
         let mut handler = move |frame: Vec<u8>| {
-            for websocket in websockets.lock().unwrap().iter() {
-                let binary_frame = tungstenite::Message::Binary(frame);
+            for websocket in &mut *websockets.lock().unwrap() {
+                let binary_frame = tungstenite::Message::Binary(frame.clone());
                 websocket.write_message(binary_frame).unwrap();
             }
         };
