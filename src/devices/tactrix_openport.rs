@@ -27,7 +27,10 @@ pub fn send_can_frame(
     arbitration_id: u32,
     frame: &[u8],
 ) {
-    println!("arbitration_id = {:08x} frame = {:?}", arbitration_id, frame);
+    println!(
+        "arbitration_id = {:08x} frame = {:?}",
+        arbitration_id, frame
+    );
     let device = device_handle.device();
     let config_desc = device.config_descriptor(0).unwrap();
     let interface = config_desc.interfaces().nth(1).unwrap();

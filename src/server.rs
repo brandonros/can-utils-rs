@@ -60,26 +60,24 @@ fn main() {
             websockets.lock().unwrap().push(websocket.clone());
             let device_handle_ref_inner1 = device_handle_ref_outer2.clone();
             // read from socket, send to device
-            std::thread::spawn(move || {
-                loop {
-                    let msg = websocket
-                        .lock()
-                        .unwrap()
-                        .read_message()
-                        .unwrap()
-                        .into_data();
-                    if (msg.len() == 0) {
-                        continue;
-                    }
-                    println!("{:?}", msg);
-                    let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
-                    let data = &msg[4..];
-                    devices::tactrix_openport::send_can_frame(
-                        &device_handle_ref_inner1,
-                        arbitration_id,
-                        data,
-                    );
+            std::thread::spawn(move || loop {
+                let msg = websocket
+                    .lock()
+                    .unwrap()
+                    .read_message()
+                    .unwrap()
+                    .into_data();
+                if (msg.len() == 0) {
+                    continue;
                 }
+                println!("{:?}", msg);
+                let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
+                let data = &msg[4..];
+                devices::tactrix_openport::send_can_frame(
+                    &device_handle_ref_inner1,
+                    arbitration_id,
+                    data,
+                );
             });
         }
     });
