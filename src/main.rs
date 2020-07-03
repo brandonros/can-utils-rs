@@ -1,9 +1,7 @@
 extern crate tungstenite;
 
 use std::sync::{Arc, Mutex};
-use std::cell::RefCell;
 use can_utils_rs::{devices};
-use std::rc::Rc;
 
 /*
 const run = async () => {
