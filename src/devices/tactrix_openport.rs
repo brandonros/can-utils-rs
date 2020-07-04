@@ -110,7 +110,7 @@ pub fn recv(device_handle: &rusb::DeviceHandle<rusb::GlobalContext>, handler: &m
             .unwrap();
         buffer.extend(&vec);
         let bytes_processed = process_buffer(&buffer, handler);
-        buffer = buffer[0..bytes_processed].to_vec();
+        buffer = buffer[bytes_processed..].to_vec();
     }
 }
 

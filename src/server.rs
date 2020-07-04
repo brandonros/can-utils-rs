@@ -20,8 +20,11 @@ fn main() {
     let device_handle_ref = device_handle_arc.clone();
     let device_thread = std::thread::spawn(move || {
         let mut handler = move |frame: Vec<u8>| {
+            println!("got frame = {:?}", frame);
             let mut websockets = websockets_ref.lock().unwrap();
-            for (_peer_addr, websocket) in websockets.iter_mut() {
+            println!("unlocked");
+            for (peer_addr, websocket) in websockets.iter_mut() {
+                println!("writing to {:?}", peer_addr);
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
                 (*websocket)
                     .write_message(binary_frame)
@@ -43,9 +46,9 @@ fn main() {
             let device_handle_ref = device_handle_arc.clone();
             // read from socket, send to device
             std::thread::spawn(move || {
-                let mut websockets = websockets_ref.lock().unwrap();
-                let websocket = websockets.get_mut(&peer_addr).unwrap();
                 loop {
+                    let mut websockets = websockets_ref.lock().unwrap();
+                    let websocket = websockets.get_mut(&peer_addr).unwrap();
                     let msg = websocket
                         .read_message()
                         .unwrap()
