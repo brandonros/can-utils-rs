@@ -46,10 +46,10 @@ fn main() {
             let device_handle_ref = device_handle_arc.clone();
             // read from socket, send to device
             std::thread::spawn(move || {
+                let mut websockets = websockets_ref.lock().unwrap();
+                let websocket = websockets.get_mut(&peer_addr).unwrap();
                 loop {
-                    let mut websockets = websockets_ref.lock().unwrap();
-                    let websocket = websockets.get_mut(&peer_addr).unwrap();
-                    let msg = websocket
+                    let msg = (*websocket)
                         .read_message()
                         .unwrap()
                         .into_data();
