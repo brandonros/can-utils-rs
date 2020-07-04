@@ -3,9 +3,9 @@ extern crate hex;
 extern crate tungstenite;
 extern crate url;
 
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::collections::HashMap;
-
 
 use clap::{App, Arg};
 
@@ -177,13 +177,13 @@ fn main() {
         u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
     // connect to server
     let (socket, _) = tungstenite::client::connect(url::Url::parse(interface).unwrap()).unwrap();
-    let socket_arc = Arc::new(Mutex::new(socket));
+    let socket_arc = Rc::new(RefCell::new(socket));
     // on websocket frame, log to isotpreader
     let isotp_reader_map: HashMap<u32, IsoTpReader> = HashMap::new();
-    let isotp_reader_map_arc = Arc::new(Mutex::new(isotp_reader_map));
+    let isotp_reader_map_arc = Rc::new(RefCell::new(isotp_reader_map));
     loop {
         let socket_ref = socket_arc.clone();
-        let frame = socket_ref.lock().unwrap().read_message().unwrap().into_data();
+        let frame = socket_ref.borrow_mut().read_message().unwrap().into_data();
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
         // TODO: should drop if arbitration_id !== destination_arbittraion_id
         let data = &frame[4..];
@@ -201,23 +201,23 @@ fn main() {
             let mut buffer: Vec<u8> = vec![];
             buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
             buffer.extend_from_slice(&flow_control_frame);
-            socket_ref.lock().unwrap().write_message(tungstenite::Message::Binary(buffer)).unwrap();
+            socket_ref.borrow_mut().write_message(tungstenite::Message::Binary(buffer)).unwrap();
         };
-        let isotp_reader_map_ref1 = isotp_reader_map_arc.clone();
-        let mut on_pdu = move |_service_id: u8, pdu: Vec<u8>| {
-            let mut output = String::new();
+        let isotp_reader_map_ref = isotp_reader_map_arc.clone();
+        let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
+            let mut output = format!("{:02x}", service_id);
             for byte in pdu {
                 output = format!("{} {:02x}", output, byte);
             }
             println!("{}", output.trim());
-            isotp_reader_map_ref1.lock().unwrap().remove(&arbitration_id);
+            isotp_reader_map_ref.borrow_mut().remove(&arbitration_id);
         };
-        let isotp_reader_map_ref2 = isotp_reader_map_arc.clone();
+        let isotp_reader_map_ref = isotp_reader_map_arc.clone();
         let mut on_error = move |reason: String| {
             println!("error: {}", reason);
-            isotp_reader_map_ref2.lock().unwrap().remove(&arbitration_id);
+            isotp_reader_map_ref.borrow_mut().remove(&arbitration_id);
         };
-        match isotp_reader_map_arc.lock().unwrap().get_mut(&arbitration_id) {
+        match isotp_reader_map_arc.borrow_mut().get_mut(&arbitration_id) {
             Some(mut isotp_reader) => {
                 record_frame(
                     &data.to_vec(),
@@ -228,20 +228,22 @@ fn main() {
                 );
             }
             None => {
-                let isotp_reader = IsoTpReader {
+                let mut isotp_reader = IsoTpReader {
                     first_frame: vec![],
                     consecutive_frames: vec![],
                     sequence_number: 0x21,
                     expected_size: 0x00,
                 };
-                isotp_reader_map_arc.lock().unwrap().insert(arbitration_id, isotp_reader);
-                /*record_frame(
+                isotp_reader_map_arc.borrow_mut().insert(arbitration_id, isotp_reader);
+                let mut isotp_reader_map = isotp_reader_map_arc.borrow_mut();
+                let mut isotp_reader = isotp_reader_map.get_mut(&arbitration_id).unwrap();
+                record_frame(
                     &data.to_vec(),
                     &mut isotp_reader,
                     &mut on_flow_control,
                     &mut on_pdu,
                     &mut on_error,
-                );*/
+                );
             }
         }
     }
