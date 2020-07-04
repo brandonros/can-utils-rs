@@ -9,19 +9,19 @@ type WebSocket = tungstenite::WebSocket<std::net::TcpStream>;
 
 fn main() {
     // init device
-    let mut device_handle = devices::tactrix_openport::new();
-    let mut device_handle_arc = Arc::new(device_handle);
+    let device_handle = devices::tactrix_openport::new();
+    let device_handle_arc = Arc::new(device_handle);
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
-    let mut websockets: HashMap<SocketAddr, WebSocket> = HashMap::new();
-    let mut websockets_arc = Arc::new(Mutex::new(websockets));
+    let websockets: HashMap<SocketAddr, WebSocket> = HashMap::new();
+    let websockets_arc = Arc::new(Mutex::new(websockets));
     // read from device, send to sockets
     let websockets_ref = websockets_arc.clone();
-    let mut device_handle_ref = device_handle_arc.clone();
+    let device_handle_ref = device_handle_arc.clone();
     let device_thread = std::thread::spawn(move || {
         let mut handler = move |frame: Vec<u8>| {
             let mut websockets = websockets_ref.lock().unwrap();
-            for (peer_addr, websocket) in websockets.iter_mut() {
+            for (_peer_addr, websocket) in websockets.iter_mut() {
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
                 (*websocket)
                     .write_message(binary_frame)
@@ -31,20 +31,20 @@ fn main() {
         devices::tactrix_openport::recv(&device_handle_ref, &mut handler);
     });
     // listen for connections
-    let mut device_handle_ref = device_handle_arc.clone();
-    let mut websockets_ref = websockets_arc.clone();
+    let _device_handle_ref = device_handle_arc.clone();
+    let websockets_ref = websockets_arc.clone();
     let server_thread = std::thread::spawn(move || {
         for stream in server.incoming() {
             let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
             let peer_addr = websocket.get_mut().peer_addr().unwrap();
             let mut websockets = websockets_ref.lock().unwrap();
             websockets.insert(peer_addr, websocket);
-            let mut websockets_ref = websockets_arc.clone();
-            let mut device_handle_ref = device_handle_arc.clone();
+            let websockets_ref = websockets_arc.clone();
+            let device_handle_ref = device_handle_arc.clone();
             // read from socket, send to device
             std::thread::spawn(move || {
                 let mut websockets = websockets_ref.lock().unwrap();
-                let mut websocket = websockets.get_mut(&peer_addr).unwrap();
+                let websocket = websockets.get_mut(&peer_addr).unwrap();
                 loop {
                     let msg = websocket
                         .read_message()
