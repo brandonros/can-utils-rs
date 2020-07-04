@@ -5,7 +5,7 @@ extern crate url;
 
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use std::io;
+
 
 use clap::{App, Arg};
 
@@ -28,7 +28,7 @@ fn low_nibble(b: u8) -> u8 {
     return b & 0x0F;
 }
 
-fn record_single_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_pdu: &mut OnPdu) {
+fn record_single_frame(data: &Vec<u8>, _isotp_reader: &mut IsoTpReader, on_pdu: &mut OnPdu) {
     let length = data[0];
     let service_id = data[1];
     let payload = &data[2..((length as usize) + 1)];
@@ -37,7 +37,7 @@ fn record_single_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_pdu: &
 
 fn record_first_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_error: &mut OnError) {
     // validate we do not already have a first frame
-    if (isotp_reader.first_frame.len() != 0) {
+    if isotp_reader.first_frame.len() != 0 {
         on_error(String::from("unexpected first frame"));
         return;
     }
@@ -47,7 +47,7 @@ fn record_first_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_error: 
 }
 
 fn rebuild_multi_frame_message(
-    data: &Vec<u8>,
+    _data: &Vec<u8>,
     isotp_reader: &mut IsoTpReader,
     on_pdu: &mut OnPdu,
 ) {
@@ -73,7 +73,7 @@ fn record_consecutive_frame(
     on_error: &mut OnError
 ) {
     // validate we have a first frame
-    if (isotp_reader.first_frame.len() == 0) {
+    if isotp_reader.first_frame.len() == 0 {
         on_error(String::from("unexpected conseuctive frame; no first frame"));
         return;
     }
@@ -93,7 +93,7 @@ fn record_consecutive_frame(
     // check if finished receiving
     let current_size = 6 + isotp_reader.consecutive_frames.len() * 7;
     let finished_receiving = current_size >= isotp_reader.expected_size as usize;
-    if (finished_receiving) {
+    if finished_receiving {
         rebuild_multi_frame_message(data, isotp_reader, on_pdu);
     }
 }
@@ -106,14 +106,14 @@ fn record_frame(
     on_error: &mut OnError,
 ) {
     let pci = high_nibble(data[0]);
-    if (pci == 0x00) {
+    if pci == 0x00 {
         record_single_frame(&data, isotp_reader, on_pdu);
-    } else if (pci == 0x01) {
+    } else if pci == 0x01 {
         record_first_frame(data, isotp_reader, on_error);
         on_flow_control();
-    } else if (pci == 0x02) {
+    } else if pci == 0x02 {
         record_consecutive_frame(data, isotp_reader, on_pdu, on_error);
-    } else if (pci == 0x03) {
+    } else if pci == 0x03 {
         // flow control; ignore
     } else {
         panic!("Unknown PCI");
@@ -176,10 +176,10 @@ fn main() {
     let source_arbitration_id: u32 =
         u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
     // connect to server
-    let (mut socket, _) = tungstenite::client::connect(url::Url::parse(interface).unwrap()).unwrap();
+    let (socket, _) = tungstenite::client::connect(url::Url::parse(interface).unwrap()).unwrap();
     let socket_arc = Arc::new(Mutex::new(socket));
     // on websocket frame, log to isotpreader
-    let mut isotp_reader_map: HashMap<u32, IsoTpReader> = HashMap::new();
+    let isotp_reader_map: HashMap<u32, IsoTpReader> = HashMap::new();
     let isotp_reader_map_arc = Arc::new(Mutex::new(isotp_reader_map));
     loop {
         let socket_ref = socket_arc.clone();
@@ -204,7 +204,7 @@ fn main() {
             socket_ref.lock().unwrap().write_message(tungstenite::Message::Binary(buffer)).unwrap();
         };
         let isotp_reader_map_ref1 = isotp_reader_map_arc.clone();
-        let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
+        let mut on_pdu = move |_service_id: u8, pdu: Vec<u8>| {
             let mut output = String::new();
             for byte in pdu {
                 output = format!("{} {:02x}", output, byte);
@@ -228,7 +228,7 @@ fn main() {
                 );
             }
             None => {
-                let mut isotp_reader = IsoTpReader {
+                let isotp_reader = IsoTpReader {
                     first_frame: vec![],
                     consecutive_frames: vec![],
                     sequence_number: 0x21,

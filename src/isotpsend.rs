@@ -144,7 +144,7 @@ fn main() {
     // convert stdin to frames
     let frames = convert_pdu_to_frames(service_id, data.to_vec(), tx_padding_byte);
     for i in 0..frames.len() {
-        if (i == 1) {
+        if i == 1 {
           // TODO: wait for flow control frame
         }
         let frame = &frames[i];

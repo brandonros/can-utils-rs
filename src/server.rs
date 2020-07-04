@@ -81,6 +81,6 @@ fn main() {
             });
         }
     });
-    device_thread.join();
-    server_thread.join();
+    device_thread.join().unwrap();
+    server_thread.join().unwrap();
 }
