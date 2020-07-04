@@ -3,17 +3,18 @@ extern crate hex;
 extern crate tungstenite;
 extern crate url;
 
+use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::io;
 
 use clap::{App, Arg};
 
-type OnPdu = dyn FnMut(u8, &Vec<u8>);
+type OnPdu = dyn FnMut(u8, Vec<u8>);
 type OnError = dyn FnMut(String);
 type OnFlowControl = dyn FnMut();
 
 struct IsoTpReader {
-    pub first_frame: Option<Vec<u8>>,
+    pub first_frame: Vec<u8>,
     pub consecutive_frames: Vec<Vec<u8>>,
     pub sequence_number: u8,
     pub expected_size: u16,
@@ -31,18 +32,18 @@ fn record_single_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_pdu: &
     let length = data[0];
     let service_id = data[1];
     let payload = &data[2..((length as usize) + 1)];
-    on_pdu(service_id, &payload.to_vec())
+    on_pdu(service_id, payload.to_vec())
 }
 
 fn record_first_frame(data: &Vec<u8>, isotp_reader: &mut IsoTpReader, on_error: &mut OnError) {
     // validate we do not already have a first frame
-    if (isotp_reader.first_frame.is_some()) {
+    if (isotp_reader.first_frame.len() != 0) {
         on_error(String::from("unexpected first frame"));
         return;
     }
-    isotp_reader.first_frame = Some(vec![]);
-    isotp_reader.first_frame.unwrap().extend(data);
-    isotp_reader.expected_size = ((low_nibble(data[0]) << 8) as u16) + (data[1] as u16);
+    isotp_reader.first_frame = vec![];
+    isotp_reader.first_frame.extend(data);
+    isotp_reader.expected_size = ((low_nibble(data[0]) as u16) << 8) + (data[1] as u16);
 }
 
 fn rebuild_multi_frame_message(
@@ -52,9 +53,9 @@ fn rebuild_multi_frame_message(
 ) {
     let mut output = vec![];
     for i in 2..8 {
-        output.push(isotp_reader.first_frame.unwrap()[i]);
+        output.push(isotp_reader.first_frame[i]);
     }
-    for consecutive_frame in isotp_reader.consecutive_frames {
+    for consecutive_frame in &isotp_reader.consecutive_frames {
         for i in 1..8 {
             output.push(consecutive_frame[i]);
         }
@@ -62,7 +63,7 @@ fn rebuild_multi_frame_message(
     let isotp_payload = &output[0..isotp_reader.expected_size as usize];
     let service_id = isotp_payload[0];
     let data = &isotp_payload[1..];
-    on_pdu(service_id, &data.to_vec())
+    on_pdu(service_id, data.to_vec())
 }
 
 fn record_consecutive_frame(
@@ -72,7 +73,7 @@ fn record_consecutive_frame(
     on_error: &mut OnError
 ) {
     // validate we have a first frame
-    if (isotp_reader.first_frame.is_none()) {
+    if (isotp_reader.first_frame.len() == 0) {
         on_error(String::from("unexpected conseuctive frame; no first frame"));
         return;
     }
@@ -175,11 +176,14 @@ fn main() {
     let source_arbitration_id: u32 =
         u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
     // connect to server
-    let (mut socket, _) = tungstenite::connect(url::Url::parse(interface).unwrap()).unwrap();
+    let (mut socket, _) = tungstenite::client::connect(url::Url::parse(interface).unwrap()).unwrap();
+    let socket_arc = Arc::new(Mutex::new(socket));
     // on websocket frame, log to isotpreader
     let mut isotp_reader_map: HashMap<u32, IsoTpReader> = HashMap::new();
+    let isotp_reader_map_arc = Arc::new(Mutex::new(isotp_reader_map));
     loop {
-        let frame = socket.read_message().unwrap().into_data();
+        let socket_ref = socket_arc.clone();
+        let frame = socket_ref.lock().unwrap().read_message().unwrap().into_data();
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
         // TODO: should drop if arbitration_id !== destination_arbittraion_id
         let data = &frame[4..];
@@ -197,21 +201,23 @@ fn main() {
             let mut buffer: Vec<u8> = vec![];
             buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
             buffer.extend_from_slice(&flow_control_frame);
-            socket.write_message(tungstenite::Message::Binary(buffer));
+            socket_ref.lock().unwrap().write_message(tungstenite::Message::Binary(buffer)).unwrap();
         };
-        let mut on_pdu = move |service_id: u8, pdu: &Vec<u8>| {
+        let isotp_reader_map_ref1 = isotp_reader_map_arc.clone();
+        let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
             let mut output = String::new();
             for byte in pdu {
                 output = format!("{} {:02x}", output, byte);
             }
             println!("{}", output.trim());
-            isotp_reader_map.remove(&arbitration_id);
+            isotp_reader_map_ref1.lock().unwrap().remove(&arbitration_id);
         };
+        let isotp_reader_map_ref2 = isotp_reader_map_arc.clone();
         let mut on_error = move |reason: String| {
             println!("error: {}", reason);
-            isotp_reader_map.remove(&arbitration_id);
+            isotp_reader_map_ref2.lock().unwrap().remove(&arbitration_id);
         };
-        match isotp_reader_map.get(&arbitration_id) {
+        match isotp_reader_map_arc.lock().unwrap().get_mut(&arbitration_id) {
             Some(mut isotp_reader) => {
                 record_frame(
                     &data.to_vec(),
@@ -223,19 +229,19 @@ fn main() {
             }
             None => {
                 let mut isotp_reader = IsoTpReader {
-                    first_frame: Some(vec![]),
+                    first_frame: vec![],
                     consecutive_frames: vec![],
                     sequence_number: 0x21,
                     expected_size: 0x00,
                 };
-                isotp_reader_map.insert(arbitration_id, isotp_reader);
-                record_frame(
+                isotp_reader_map_arc.lock().unwrap().insert(arbitration_id, isotp_reader);
+                /*record_frame(
                     &data.to_vec(),
                     &mut isotp_reader,
                     &mut on_flow_control,
                     &mut on_pdu,
                     &mut on_error,
-                );
+                );*/
             }
         }
     }
