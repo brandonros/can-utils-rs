@@ -81,7 +81,7 @@ fn convert_pdu_to_frames(service_id: u8, data: Vec<u8>, tx_padding_byte: u8) -> 
 fn read_stdin() -> Vec<u8> {
     let stdin = io::stdin();
     let mut buf = String::new();
-    stdin.read_line(&mut buf);
+    stdin.read_line(&mut buf).unwrap();
     return hex::decode(buf.trim().replace(" ", "")).unwrap();
 }
 
@@ -151,7 +151,7 @@ fn main() {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
         buffer.extend_from_slice(&frame);
-        socket.write_message(tungstenite::Message::Binary(buffer));
+        socket.write_message(tungstenite::Message::Binary(buffer)).unwrap();
         std::thread::sleep(std::time::Duration::from_nanos(st_min));
     }
     // TODO: set up websocket reader to watch for flow control frame if pci == 0x03
