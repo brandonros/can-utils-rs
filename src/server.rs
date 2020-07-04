@@ -2,82 +2,66 @@ extern crate tungstenite;
 
 use can_utils_rs::devices;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
-/*
-const run = async () => {
-  const socket = new WebSocket('ws://127.0.0.1:9001')
-  await new Promise(resolve => socket.onopen = resolve)
-  setInterval(() => {
-    socket.send(new Uint8Array([
-        0x00,
-        0x00,
-        0x07,
-        0xE5,
-        0x02,
-        0x10,
-        0x03,
-        0x55,
-        0x55,
-        0x55,
-        0x55
-      ]))
-  }, 500)
-}
-
-run()
-*/
+type SocketAddr = std::net::SocketAddr;
+type WebSocket = tungstenite::WebSocket<std::net::TcpStream>;
 
 fn main() {
     // init device
-    let device_handle = Arc::new(devices::tactrix_openport::new());
-    let device_handle_ref_outer1 = device_handle.clone();
-    let device_handle_ref_outer2 = device_handle.clone();
+    let mut device_handle = devices::tactrix_openport::new();
+    let mut device_handle_arc = Arc::new(device_handle);
     // init server
     let server = std::net::TcpListener::bind("127.0.0.1:9001").unwrap();
-    let websockets: Arc<Mutex<Vec<Arc<Mutex<tungstenite::WebSocket<std::net::TcpStream>>>>>> =
-        Arc::new(Mutex::new(vec![]));
+    let mut websockets: HashMap<SocketAddr, WebSocket> = HashMap::new();
+    let mut websockets_arc = Arc::new(Mutex::new(websockets));
     // read from device, send to sockets
-    let websockets_ref = websockets.clone();
+    let websockets_ref = websockets_arc.clone();
+    let mut device_handle_ref = device_handle_arc.clone();
     let device_thread = std::thread::spawn(move || {
         let mut handler = move |frame: Vec<u8>| {
-            for websocket in websockets_ref.lock().unwrap().iter() {
+            let mut websockets = websockets_ref.lock().unwrap();
+            for (peer_addr, websocket) in websockets.iter_mut() {
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
-                websocket
-                    .lock()
-                    .unwrap()
+                (*websocket)
                     .write_message(binary_frame)
                     .unwrap();
             }
         };
-        devices::tactrix_openport::recv(&device_handle_ref_outer1, &mut handler);
+        devices::tactrix_openport::recv(&device_handle_ref, &mut handler);
     });
     // listen for connections
+    let mut device_handle_ref = device_handle_arc.clone();
+    let mut websockets_ref = websockets_arc.clone();
     let server_thread = std::thread::spawn(move || {
         for stream in server.incoming() {
-            let websocket = Arc::new(Mutex::new(
-                tungstenite::server::accept(stream.unwrap()).unwrap(),
-            ));
-            websockets.lock().unwrap().push(websocket.clone());
-            let device_handle_ref_inner1 = device_handle_ref_outer2.clone();
+            let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
+            let peer_addr = websocket.get_mut().peer_addr().unwrap();
+            let mut websockets = websockets_ref.lock().unwrap();
+            websockets.insert(peer_addr, websocket);
+            let mut websockets_ref = websockets_arc.clone();
+            let mut device_handle_ref = device_handle_arc.clone();
             // read from socket, send to device
-            std::thread::spawn(move || loop {
-                let msg = websocket
-                    .lock()
-                    .unwrap()
-                    .read_message()
-                    .unwrap()
-                    .into_data();
-                if msg.len() == 0 {
-                    continue;
+            std::thread::spawn(move || {
+                let mut websockets = websockets_ref.lock().unwrap();
+                let mut websocket = websockets.get_mut(&peer_addr).unwrap();
+                loop {
+                    let msg = websocket
+                        .read_message()
+                        .unwrap()
+                        .into_data();
+                    if msg.len() == 0 {
+                        continue;
+                    }
+                    println!("{:?}", msg);
+                    let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
+                    let data = &msg[4..];
+                    devices::tactrix_openport::send_can_frame(
+                        &device_handle_ref,
+                        arbitration_id,
+                        data,
+                    );
                 }
-                println!("{:?}", msg);
-                let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
-                let data = &msg[4..];
-                devices::tactrix_openport::send_can_frame(
-                    &device_handle_ref_inner1,
-                    arbitration_id,
-                    data,
-                );
             });
         }
     });
