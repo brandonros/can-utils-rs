@@ -228,7 +228,7 @@ fn main() {
                 );
             }
             None => {
-                let mut isotp_reader = IsoTpReader {
+                let isotp_reader = IsoTpReader {
                     first_frame: vec![],
                     consecutive_frames: vec![],
                     sequence_number: 0x21,
