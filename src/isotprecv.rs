@@ -13,6 +13,7 @@ type OnPdu = dyn FnMut(u8, Vec<u8>);
 type OnError = dyn FnMut(String);
 type OnFlowControl = dyn FnMut();
 
+#[derive(Clone)]
 struct IsoTpReader {
     pub first_frame: Vec<u8>,
     pub consecutive_frames: Vec<Vec<u8>>,
@@ -185,7 +186,7 @@ fn main() {
         let socket_ref = socket_rc.clone();
         let mut socket = socket_ref.borrow_mut();
         let frame = socket.read_message().unwrap().into_data();
-        println!("{:?}", frame);
+        std::mem::drop(socket);
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
         // TODO: should drop if arbitration_id !== destination_arbittraion_id
         let data = &frame[4..];
@@ -209,7 +210,7 @@ fn main() {
         };
         let isotp_reader_map_ref = isotp_reader_map_rc.clone();
         let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
-            let mut output = format!("{:02x}", service_id);
+            let mut output = format!("{:08x} {:02x}", arbitration_id, service_id);
             for byte in pdu {
                 output = format!("{} {:02x}", output, byte);
             }
@@ -225,37 +226,34 @@ fn main() {
         };
         let isotp_reader_map_ref = isotp_reader_map_rc.clone();
         let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
-        match isotp_reader_map.get_mut(&arbitration_id) {
-            Some(mut isotp_reader) => {
-                record_frame(
-                    &data.to_vec(),
-                    &mut isotp_reader,
-                    &mut on_flow_control,
-                    &mut on_pdu,
-                    &mut on_error,
-                );
-            }
-            None => {
-                let isotp_reader = IsoTpReader {
-                    first_frame: vec![],
-                    consecutive_frames: vec![],
-                    sequence_number: 0x21,
-                    expected_size: 0x00,
-                };
-                let isotp_reader_map_ref = isotp_reader_map_rc.clone();
-                let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
-                isotp_reader_map.insert(arbitration_id, isotp_reader);
-                let isotp_reader_map_ref = isotp_reader_map_rc.clone();
-                let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
-                let mut isotp_reader = isotp_reader_map.get_mut(&arbitration_id).unwrap();
-                record_frame(
-                    &data.to_vec(),
-                    &mut isotp_reader,
-                    &mut on_flow_control,
-                    &mut on_pdu,
-                    &mut on_error,
-                );
-            }
+        let isotp_reader = isotp_reader_map.get_mut(&arbitration_id);
+        if isotp_reader.is_some() {
+            let mut isotp_reader = isotp_reader.unwrap().clone();
+            std::mem::drop(isotp_reader_map);
+            record_frame(
+                &data.to_vec(),
+                &mut isotp_reader,
+                &mut on_flow_control,
+                &mut on_pdu,
+                &mut on_error,
+            );
+        } else {
+            let isotp_reader = IsoTpReader {
+                first_frame: vec![],
+                consecutive_frames: vec![],
+                sequence_number: 0x21,
+                expected_size: 0x00,
+            };
+            isotp_reader_map.insert(arbitration_id, isotp_reader);
+            let mut isotp_reader = isotp_reader_map.get_mut(&arbitration_id).unwrap().clone();
+            std::mem::drop(isotp_reader_map);
+            record_frame(
+                &data.to_vec(),
+                &mut isotp_reader,
+                &mut on_flow_control,
+                &mut on_pdu,
+                &mut on_error,
+            );
         }
     }
 }
