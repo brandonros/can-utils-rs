@@ -47,7 +47,8 @@ fn main() {
             // read from socket, send to device
             std::thread::spawn(move || {
                 let mut websockets_map = websockets_map_ref.lock().unwrap();
-                let mut websocket = websockets_map.get_mut(&peer_addr).unwrap();
+                let websocket = websockets_map.get_mut(&peer_addr).unwrap();
+                std::mem::drop(websockets_map);
                 loop {
                     let msg = websocket
                         .read_message()
