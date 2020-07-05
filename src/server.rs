@@ -7,7 +7,6 @@ use std::collections::HashMap;
 type SocketAddr = std::net::SocketAddr;
 type TcpStream = std::net::TcpStream;
 type Role = tungstenite::protocol::Role;
-type WebSocket = tungstenite::WebSocket<TcpStream>;
 
 fn main() {
     // init device
@@ -54,7 +53,7 @@ fn main() {
             let device_handle_ref = device_handle_arc.clone();
             // read from socket, send to device
             std::thread::spawn(move || {
-                let mut read_streams_map = read_streams_map_ref.lock().unwrap();
+                let read_streams_map = read_streams_map_ref.lock().unwrap();
                 let stream = read_streams_map.get(&peer_addr).unwrap().try_clone().unwrap();
                 let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Client, None);
                 loop {
