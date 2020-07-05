@@ -23,13 +23,13 @@ fn main() {
     let device_handle_ref = device_handle_arc.clone();
     let device_thread = std::thread::spawn(move || {
         let mut handler = move |frame: Vec<u8>| {
-            println!("got frame = {:?}", frame);
+            println!("got device frame = {:?}", frame);
             let write_streams_map = write_streams_map_ref.lock().unwrap();
             println!("unlocked");
             let mut to_remove = vec![];
             for (peer_addr, stream) in write_streams_map.iter() {
                 let stream = stream.try_clone().unwrap();
-                let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Client, None);
+                let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Server, None);
                 println!("writing to {:?}", peer_addr);
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
                 let result = websocket
@@ -73,7 +73,7 @@ fn main() {
                 let read_streams_map = read_streams_map_ref.lock().unwrap();
                 let stream = read_streams_map.get(&peer_addr).unwrap().try_clone().unwrap();
                 std::mem::drop(read_streams_map);
-                let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Client, None);
+                let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Server, None);
                 loop {
                     println!("reading from socket");
                     let msg = websocket

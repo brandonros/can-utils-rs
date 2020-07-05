@@ -183,11 +183,13 @@ fn main() {
     let isotp_reader_map_rc = Rc::new(RefCell::new(isotp_reader_map));
     loop {
         let socket_ref = socket_rc.clone();
-        let frame = socket_ref.borrow_mut().read_message().unwrap().into_data();
+        let mut socket = socket_ref.borrow_mut();
+        let frame = socket.read_message().unwrap().into_data();
         println!("{:?}", frame);
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
         // TODO: should drop if arbitration_id !== destination_arbittraion_id
         let data = &frame[4..];
+        let socket_ref = socket_rc.clone();
         let mut on_flow_control = move || {
             let flow_control_frame: Vec<u8> = vec![
                 0x30,
@@ -202,7 +204,8 @@ fn main() {
             let mut buffer: Vec<u8> = vec![];
             buffer.extend_from_slice(&source_arbitration_id.to_be_bytes());
             buffer.extend_from_slice(&flow_control_frame);
-            socket_ref.borrow_mut().write_message(tungstenite::Message::Binary(buffer)).unwrap();
+            let mut socket = socket_ref.borrow_mut();
+            socket.write_message(tungstenite::Message::Binary(buffer)).unwrap();
         };
         let isotp_reader_map_ref = isotp_reader_map_rc.clone();
         let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
@@ -211,14 +214,18 @@ fn main() {
                 output = format!("{} {:02x}", output, byte);
             }
             println!("{}", output.trim());
-            isotp_reader_map_ref.borrow_mut().remove(&arbitration_id);
+            let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
+            isotp_reader_map.remove(&arbitration_id);
         };
         let isotp_reader_map_ref = isotp_reader_map_rc.clone();
         let mut on_error = move |reason: String| {
             println!("error: {}", reason);
-            isotp_reader_map_ref.borrow_mut().remove(&arbitration_id);
+            let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
+            isotp_reader_map.remove(&arbitration_id);
         };
-        match isotp_reader_map_rc.borrow_mut().get_mut(&arbitration_id) {
+        let isotp_reader_map_ref = isotp_reader_map_rc.clone();
+        let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
+        match isotp_reader_map.get_mut(&arbitration_id) {
             Some(mut isotp_reader) => {
                 record_frame(
                     &data.to_vec(),
@@ -235,8 +242,11 @@ fn main() {
                     sequence_number: 0x21,
                     expected_size: 0x00,
                 };
-                isotp_reader_map_rc.borrow_mut().insert(arbitration_id, isotp_reader);
-                let mut isotp_reader_map = isotp_reader_map_rc.borrow_mut();
+                let isotp_reader_map_ref = isotp_reader_map_rc.clone();
+                let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
+                isotp_reader_map.insert(arbitration_id, isotp_reader);
+                let isotp_reader_map_ref = isotp_reader_map_rc.clone();
+                let mut isotp_reader_map = isotp_reader_map_ref.borrow_mut();
                 let mut isotp_reader = isotp_reader_map.get_mut(&arbitration_id).unwrap();
                 record_frame(
                     &data.to_vec(),
