@@ -6,7 +6,7 @@ BASEDIR=$(dirname "$0")
 
 echo $1
 
-printf "%s" $1 | ./target/debug/isotpsend \
+printf "%s" $1 | ./target/release/isotpsend \
   -s $REQUEST_ARBITRATION_ID \
   -d $REPLY_ARBITRATION_ID \
   -p $TX_PADDING_BYTE:$RX_PADDING_BYTE \

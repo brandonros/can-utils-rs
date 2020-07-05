@@ -4,7 +4,7 @@ BASEDIR=$(dirname "$0")
 
 . $BASEDIR/isotp-config.sh
 
-RUST_BACKTRACE=1 ./target/debug/isotprecv \
+./target/release/isotprecv \
   -s $REQUEST_ARBITRATION_ID \
   -d $REPLY_ARBITRATION_ID \
   -p $TX_PADDING_BYTE:$RX_PADDING_BYTE \
