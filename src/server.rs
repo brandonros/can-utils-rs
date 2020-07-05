@@ -24,17 +24,33 @@ fn main() {
     let device_thread = std::thread::spawn(move || {
         let mut handler = move |frame: Vec<u8>| {
             println!("got frame = {:?}", frame);
-            let mut write_streams_map = write_streams_map_ref.lock().unwrap();
+            let write_streams_map = write_streams_map_ref.lock().unwrap();
             println!("unlocked");
-            for (peer_addr, stream) in write_streams_map.iter_mut() {
+            let mut to_remove = vec![];
+            for (peer_addr, stream) in write_streams_map.iter() {
                 let stream = stream.try_clone().unwrap();
                 let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Client, None);
                 println!("writing to {:?}", peer_addr);
                 let binary_frame = tungstenite::Message::Binary(frame.clone());
-                websocket
-                    .write_message(binary_frame)
-                    .unwrap();
+                let result = websocket
+                    .write_message(binary_frame);
+                match result {
+                    Ok(_) => {},
+                    Err(e) => {
+                        println!("{}", e);
+                        to_remove.push(peer_addr.clone());
+                        continue;
+                    }
+                }
+                println!("done here");
             }
+            std::mem::drop(write_streams_map);
+            let mut write_streams_map = write_streams_map_ref.lock().unwrap();
+            for peer_addr in to_remove {
+                println!("removing {:?}", peer_addr);
+                write_streams_map.remove(&peer_addr);
+            }
+            std::mem::drop(write_streams_map);
         };
         devices::tactrix_openport::recv(&device_handle_ref, &mut handler);
     });
@@ -45,6 +61,7 @@ fn main() {
         for stream in server.incoming() {
             let mut websocket = tungstenite::server::accept(stream.unwrap()).unwrap();
             let peer_addr = websocket.get_mut().peer_addr().unwrap();
+            println!("accepted peer_addr = {:?}", peer_addr);
             let mut read_streams_map = read_streams_map_ref.lock().unwrap();
             read_streams_map.insert(peer_addr, websocket.get_mut().try_clone().unwrap());
             let mut write_streams_map = write_streams_map_ref.lock().unwrap();
@@ -55,23 +72,35 @@ fn main() {
             std::thread::spawn(move || {
                 let read_streams_map = read_streams_map_ref.lock().unwrap();
                 let stream = read_streams_map.get(&peer_addr).unwrap().try_clone().unwrap();
+                std::mem::drop(read_streams_map);
                 let mut websocket = tungstenite::WebSocket::<std::net::TcpStream>::from_raw_socket(stream, Role::Client, None);
                 loop {
+                    println!("reading from socket");
                     let msg = websocket
-                        .read_message()
-                        .unwrap()
-                        .into_data();
-                    if msg.len() == 0 {
-                        continue;
+                        .read_message();
+                    println!("read from socket");
+                    match msg {
+                        Ok(msg) => {
+                            let msg = msg.into_data();
+                            if msg.len() == 0 {
+                                continue;
+                            }
+                            println!("sending to device {:?}", msg);
+                            let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
+                            let data = &msg[4..];
+                            devices::tactrix_openport::send_can_frame(
+                                &device_handle_ref,
+                                arbitration_id,
+                                data,
+                            );
+                        },
+                        Err(err) => {
+                            println!("err = {:?}", err);
+                            let mut read_streams_map = read_streams_map_ref.lock().unwrap();
+                            read_streams_map.remove(&peer_addr);
+                            return;
+                        }
                     }
-                    println!("{:?}", msg);
-                    let arbitration_id = u32::from_be_bytes([msg[0], msg[1], msg[2], msg[3]]);
-                    let data = &msg[4..];
-                    devices::tactrix_openport::send_can_frame(
-                        &device_handle_ref,
-                        arbitration_id,
-                        data,
-                    );
                 }
             });
         }
