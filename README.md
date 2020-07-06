@@ -28,7 +28,7 @@ In terminal 3:
 In PowerShell instance 1:
 
 1. `cd extracted_archive_directory`
-1. `(new-object System.Net.WebClient).DownloadFile('https://frippery.org/files/busybox/busybox.exe','busybox.exe')`
+1. `(new-object System.Net.WebClient).DownloadFile("https://frippery.org/files/busybox/busybox.exe","$(pwd)/busybox.exe")`
 1. `busybox.exe sh`
 1. `./server.exe`
 
