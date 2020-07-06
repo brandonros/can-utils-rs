@@ -108,6 +108,7 @@ dependencies = [
  "clap",
  "hex",
  "rusb",
+ "tactrix-openport",
  "tungstenite",
  "url",
 ]
@@ -595,6 +596,14 @@ name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
+
+[[package]]
+name = "tactrix-openport"
+version = "0.0.1"
+source = "git+https://github.com/brandonros/rust-tactrix-openport#70a84938d1921e6d9742e049d7e279c90ba283ee"
+dependencies = [
+ "rusb",
+]
 
 [[package]]
 name = "take_mut"
