@@ -34,9 +34,9 @@ In PowerShell instance 1:
 In PowerShell instance 2:
 
 1. `cd extracted_archive_directory`
-1. `busybox.exe sh isotprecv-loop.sh`
+1. `./busybox.exe sh isotprecv-loop.sh`
 
 In PowerShell instance 3:
 
 1. `cd extracted_archive_directory`
-1. `busybox.exe sh isotpsend.sh "10 03"`
+1. `./busybox.exe sh isotpsend.sh "10 03"`
