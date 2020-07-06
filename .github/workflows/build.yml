@@ -7,7 +7,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-18.04, windows-2019, macos-10.15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
@@ -19,35 +19,35 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
-          path: scripts/**/*.sh
+          path: scripts/
       # linux/mac artifacts
-      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+      - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
           path: target/release/server
-      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+      - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
           path: target/release/isotprecv
-      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+      - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
           path: target/release/isotpsend
       # windows artifacts
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
           path: target/release/server.exe
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
           path: target/release/isotprecv.exe
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
