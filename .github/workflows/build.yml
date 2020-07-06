@@ -18,37 +18,37 @@ jobs:
       # scripts in all artifacts
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: scripts
       # linux/mac artifacts
       - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/server
       - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/isotprecv
       - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/isotpsend
       # windows artifacts
       - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/server.exe
       - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/isotprecv.exe
       - if: matrix.os == 'windows-2019'
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ github.sha }}
           path: target/release/isotpsend.exe
