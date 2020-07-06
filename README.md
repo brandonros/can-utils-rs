@@ -13,11 +13,11 @@ In terminal 1:
 
 In terminal 2:
 
-1. `./scripts/isotprecv-loop.sh`
+1. `./isotprecv-loop.sh`
 
 In terminal 3:
 
-1. `./scripts/isotpsend.sh "10 03"`
+1. `./isotpsend.sh "10 03"`
 
 ## Usage (Windows)
 
@@ -29,17 +29,14 @@ In PowerShell instance 1:
 
 1. `cd extracted_archive_directory`
 1. `(new-object System.Net.WebClient).DownloadFile("https://frippery.org/files/busybox/busybox.exe","$(pwd)/busybox.exe")`
-1. `busybox.exe sh`
 1. `./server.exe`
 
 In PowerShell instance 2:
 
 1. `cd extracted_archive_directory`
-1. `busybox.exe sh`
-1. `./scripts/isotprecv-loop.sh`
+1. `busybox.exe sh isotprecv-loop.sh`
 
 In PowerShell instance 3:
 
 1. `cd extracted_archive_directory`
-1. `busybox.exe sh`
-1. `./scripts/isotpsend.sh "10 03"`
+1. `busybox.exe sh isotpsend.sh "10 03"`
