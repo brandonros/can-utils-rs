@@ -176,6 +176,8 @@ fn main() {
     let st_min: u64 = matches.value_of("st_min").unwrap().parse().unwrap();
     let source_arbitration_id: u32 =
         u32::from_str_radix(matches.value_of("source_arbitration_id").unwrap(), 16).unwrap();
+    let destination_arbitration_id: u32 =
+        u32::from_str_radix(matches.value_of("destination_arbitration_id").unwrap(), 16).unwrap();
     // connect to server
     let (socket, _) = tungstenite::client::connect(url::Url::parse(interface).unwrap()).unwrap();
     let socket_rc = Rc::new(RefCell::new(socket));
@@ -188,7 +190,10 @@ fn main() {
         let frame = socket.read_message().unwrap().into_data();
         std::mem::drop(socket);
         let arbitration_id = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
-        // TODO: should drop if arbitration_id !== destination_arbittraion_id
+        let should_drop = arbitration_id != destination_arbitration_id;
+        if should_drop {
+            continue;
+        }
         let data = &frame[4..];
         let socket_ref = socket_rc.clone();
         let mut on_flow_control = move || {

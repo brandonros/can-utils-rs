@@ -1,7 +1,6 @@
 #!/bin/bash
 
 BASEDIR=$(dirname "$0")
-
 . $BASEDIR/isotp-config.sh
 
 echo $1
