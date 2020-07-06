@@ -1,0 +1,51 @@
+name: Build
+on:
+  push:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    name: 'build'
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo build --release
+      # linux/mac artifacts
+      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/server
+      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/isotprecv
+      - if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/isotpsend
+      # windows artifacts
+      - if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/server.exe
+      - if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/isotprecv.exe
+      - if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/isotpsend.exe
