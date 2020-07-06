@@ -3,7 +3,7 @@ isotprecv + isotpsend in Rust with userspace USB device drivers
 
 ## Usage (Mac/Linux)
 
-1. Download latest artifact archive from https://github.com/brandonros/can-utils-rs/actions
+1. Download latest release archive from https://github.com/brandonros/can-utils-rs/releases
 1. Extract archive.
 1. Open 3 terminals.
 
@@ -21,7 +21,7 @@ In terminal 3:
 
 ## Usage (Windows)
 
-1. Download latest artifact archive from https://github.com/brandonros/can-utils-rs/actions
+1. Download latest relase archive from https://github.com/brandonros/can-utils-rs/releases
 1. Extract archive.
 1. Open 3 PowerShell instances.
 
