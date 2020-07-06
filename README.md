@@ -3,13 +3,19 @@ isotprecv + isotpsend in Rust with userspace USB device drivers
 
 ## Usage (Mac/Linux)
 
-1. `./target/release/server`
+1. Download latest artifact archive from https://github.com/brandonros/can-utils-rs/actions
+1. Extract archive.
+1. Open 3 terminals.
 
-In another terminal:
+In terminal 1:
+
+1. `./server`
+
+In terminal 2:
 
 1. `./scripts/isotprecv-loop.sh`
 
-In another terminal:
+In terminal 3:
 
 1. `./scripts/isotpsend.sh "10 03"`
 
