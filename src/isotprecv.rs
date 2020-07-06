@@ -215,7 +215,7 @@ fn main() {
         };
         let isotp_reader_map_ref = isotp_reader_map_rc.clone();
         let mut on_pdu = move |service_id: u8, pdu: Vec<u8>| {
-            let mut output = format!("{:08x} {:02x}", arbitration_id, service_id);
+            let mut output = format!("{:02x}", service_id);
             for byte in pdu {
                 output = format!("{} {:02x}", output, byte);
             }
