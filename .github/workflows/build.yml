@@ -19,7 +19,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}
-          path: scripts/
+          path: scripts
       # linux/mac artifacts
       - if: matrix.os == 'ubuntu-18.04' || matrix.os == 'macos-10.15'
         uses: actions/upload-artifact@v2
