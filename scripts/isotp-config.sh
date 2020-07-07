@@ -23,9 +23,11 @@ wait_for_response() {
   SIZE=$(printf "%s" "$EXPECTED_RESPONSE" | wc -c | tr -d ' ')
   while [ 1 ]
   do
-    RESPONSE=$(tail -n 1 isotp-buffer.txt | head -c $SIZE)
+    LINE=$(tail -n 1 isotp-buffer.txt)
+    RESPONSE=$(printf "%s" "$LINE" | head -c $SIZE)
     if [ "$RESPONSE" == "$EXPECTED_RESPONSE" ]
     then
+      echo $LINE
       break
     fi
     echo "waiting... RESPONSE = \"$RESPONSE\" EXPECTED_RESPONSE = \"$EXPECTED_RESPONSE\" SIZE = $SIZE"
