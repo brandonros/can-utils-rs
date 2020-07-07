@@ -9,4 +9,4 @@ $ISOTPRECV_PATH \
   -p $TX_PADDING_BYTE:$RX_PADDING_BYTE \
   -f $ST_MIN \
   -l \
-  $CAN_INTERFACE_NAME | tee isotp-buffer.txt
+  $CAN_INTERFACE_NAME | tee $ISOTP_BUFFER_FILE

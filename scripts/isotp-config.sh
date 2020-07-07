@@ -1,10 +1,18 @@
 #!/bin/bash
+BASEDIR=$(dirname "$0")
+
+if [[ -z "$ISOTP_BUFFER_FILE" ]]
+then
+  export ISOTP_BUFFER_FILE="$BASEDIR/isotp-buffer.txt"
+fi
+
 REQUEST_ARBITRATION_ID="7E5"
 REPLY_ARBITRATION_ID="7ED"
 CAN_INTERFACE_NAME="ws://127.0.0.1:9001"
 ST_MIN="2000000" # 2ms in nanoseconds
 TX_PADDING_BYTE="55"
 RX_PADDING_BYTE="AA"
+
 [[ "$(uname)" = "Windows_NT" ]] && ISOTPSEND_PATH="./isotpsend.exe" || ISOTPSEND_PATH="./isotpsend"
 [[ "$(uname)" = "Windows_NT" ]] && ISOTPRECV_PATH="./isotprecv.exe" || ISOTPRECV_PATH="./isotprecv"
 
@@ -20,10 +28,11 @@ isotp_send() {
 
 wait_for_response() {
   EXPECTED_RESPONSE=$1
+  EXPECTED_RESPONSE=$(printf "%s" "$EXPECTED_RESPONSE" |  tr '[:upper:]' '[:lower:]')
   SIZE=$(printf "%s" "$EXPECTED_RESPONSE" | wc -c | tr -d ' ')
   while [ 1 ]
   do
-    LINE=$(tail -n 1 isotp-buffer.txt)
+    LINE=$(tail -n 1 $ISOTP_BUFFER_FILE | tr '[:upper:]' '[:lower:]')
     RESPONSE=$(printf "%s" "$LINE" | head -c $SIZE)
     if [ "$RESPONSE" == "$EXPECTED_RESPONSE" ]
     then
