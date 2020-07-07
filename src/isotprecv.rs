@@ -26,13 +26,11 @@ fn low_nibble(b: u8) -> u8 {
 }
 
 fn on_error(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32, reason: String) {
-    println!("doing on_error");
     println!("error: {}", reason);
     isotp_reader_map.remove(&arbitration_id);
 }
 
 fn on_pdu(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32, service_id: u8, pdu: Vec<u8>) {
-    println!("doing on_pdu");
     let mut output = format!("{:02x}", service_id);
     for byte in pdu {
         output = format!("{} {:02x}", output, byte);
@@ -42,7 +40,6 @@ fn on_pdu(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32,
 }
 
 fn on_flow_control(socket: &mut WebSocket, st_min: u64, source_arbitration_id: u32) {
-    println!("doing on_flow_control");
     let flow_control_frame: Vec<u8> = vec![
         0x30,
         0x00,
@@ -76,7 +73,6 @@ fn record_first_frame(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitrat
     isotp_reader.first_frame = vec![];
     isotp_reader.first_frame.extend(data);
     isotp_reader.expected_size = ((low_nibble(data[0]) as u16) << 8) + (data[1] as u16);
-    println!("recorded_first_frame data = {:?} expected_size = {:04x}", isotp_reader.first_frame, isotp_reader.expected_size);
 }
 
 fn rebuild_multi_frame_message(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32) {
