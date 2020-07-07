@@ -9,6 +9,7 @@ rusb = "0.5"
 clap = "2.33.1"
 hex = "0.4.2"
 url = "2.1.1"
+native-tls = "0.2.4"
 tactrix-openport = { git = "https://github.com/brandonros/rust-tactrix-openport" }
 
 [[bin]]
