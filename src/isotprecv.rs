@@ -4,8 +4,6 @@ extern crate tungstenite;
 extern crate url;
 extern crate native_tls;
 
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use clap::{App, Arg};
@@ -82,7 +80,7 @@ fn record_first_frame(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitrat
 }
 
 fn rebuild_multi_frame_message(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32) {
-    let mut isotp_reader = isotp_reader_map.get_mut(&arbitration_id).unwrap();
+    let isotp_reader = isotp_reader_map.get(&arbitration_id).unwrap();
     let mut output = vec![];
     for i in 2..8 {
         output.push(isotp_reader.first_frame[i]);
@@ -126,7 +124,7 @@ fn record_consecutive_frame(isotp_reader_map: &mut HashMap<u32, IsoTpReader>, ar
     }
 }
 
-fn record_frame(socket: &mut WebSocket, isotp_reader_map: &mut HashMap<u32, IsoTpReader>, arbitration_id: u32, data: &Vec<u8>, st_min: u64, source_arbitration_id: u32) {
+fn record_frame(socket: &mut WebSocket, isotp_reader_map: &mut HashMap<u32, IsoTpReader>, st_min: u64, source_arbitration_id: u32, arbitration_id: u32, data: &Vec<u8>) {
     let pci = high_nibble(data[0]);
     if pci == 0x00 {
         record_single_frame(isotp_reader_map, arbitration_id, &data);
@@ -223,6 +221,6 @@ fn main() {
             };
             isotp_reader_map.insert(arbitration_id, isotp_reader);
         }
-        record_frame(&mut socket, &mut isotp_reader_map, arbitration_id, &data.to_vec(), st_min, source_arbitration_id);
+        record_frame(&mut socket, &mut isotp_reader_map, st_min, source_arbitration_id, arbitration_id, &data.to_vec());
     }
 }
