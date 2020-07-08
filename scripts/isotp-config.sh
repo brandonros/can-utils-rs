@@ -1,11 +1,5 @@
 #!/bin/bash
-BASEDIR=$(dirname "$0")
-
-if [[ -z "$ISOTP_BUFFER_FILE" ]]
-then
-  export ISOTP_BUFFER_FILE="$BASEDIR/isotp-buffer.txt"
-fi
-
+ISOTP_BUFFER_FILE="/tmp/isotp-buffer.txt"
 REQUEST_ARBITRATION_ID="7E5"
 REPLY_ARBITRATION_ID="7ED"
 CAN_INTERFACE_NAME="ws://127.0.0.1:9001"
@@ -28,7 +22,7 @@ isotp_send() {
 
 wait_for_response() {
   EXPECTED_RESPONSE=$1
-  EXPECTED_RESPONSE=$(printf "%s" "$EXPECTED_RESPONSE" |  tr '[:upper:]' '[:lower:]')
+  EXPECTED_RESPONSE=$(printf "%s" "$EXPECTED_RESPONSE" | tr '[:upper:]' '[:lower:]')
   SIZE=$(printf "%s" "$EXPECTED_RESPONSE" | wc -c | tr -d ' ')
   while [ 1 ]
   do
